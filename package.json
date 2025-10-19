@@ -1,0 +1,30 @@
+{
+  "name": "sleepiq",
+  "version": "1.0.0",
+  "description": "SleepIQ data scraper using Puppeteer and AWS Lambda",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx scripts/run-local.ts",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cybervoid/sleepiq.git"
+  },
+  "keywords": ["sleepiq", "scraper", "puppeteer", "aws-lambda"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/cybervoid/sleepiq/issues"
+  },
+  "homepage": "https://github.com/cybervoid/sleepiq#readme"
+}
+    "@types/node": "^24.8.1",
+    "dotenv": "^17.2.3",
+    "puppeteer": "^24.25.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
