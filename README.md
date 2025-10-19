@@ -24,17 +24,66 @@ HEADLESS=false
 ```
 
 ### 3. Run the Scraper
+
+#### Single Sleeper Data (Original)
 ```bash
 npm run dev
+```
+
+#### Multiple Sleepers Data (New)
+```bash
+npm run example-sleepers
 ```
 
 This will:
 - Launch a visible Chrome browser (HEADLESS=false)
 - Log in to your SleepIQ account
 - Navigate to the dashboard
-- Extract available sleep metrics
-- Output the results as JSON
+- Extract sleep data for both "rafa" and "miki" sleepers
+- Output the results as JSON with separate keys for each sleeper
 - Take debug screenshots if enabled
+
+#### Test Scripts
+```bash
+# Test basic login functionality
+npm run test-login
+
+# Test sleeper data extraction
+npm run test-sleepers
+```
+
+## Data Structure
+
+### Single Sleeper (Original)
+```typescript
+interface SleepMetrics {
+  date: string;
+  sleepScore?: number;
+  durationMinutes?: number;
+  timeInBedMinutes?: number;
+  restfulMinutes?: number;
+  restlessMinutes?: number;
+  awakeMinutes?: number;
+  heartRateAvg?: number;
+  respirationRateAvg?: number;
+  outOfBedCount?: number;
+  raw?: any;
+}
+```
+
+### Multiple Sleepers (New)
+```typescript
+interface SleepDataBySleeper {
+  rafa: SleepMetrics;
+  miki: SleepMetrics;
+}
+```
+
+The new `scrapeSleepDataBySleeper` function returns a JSON object with two keys:
+- `rafa`: Sleep metrics for the first sleeper
+- `miki`: Sleep metrics for the second sleeper
+
+Each sleeper's data follows the same `SleepMetrics` structure as the original single-sleeper function.
 
 ## Configuration Options
 

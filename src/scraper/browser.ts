@@ -71,7 +71,7 @@ export async function newPage(browser: Browser, options: ScraperOptions = {}): P
 
 export async function takeDebugScreenshot(page: Page, filename: string = 'debug.png'): Promise<void> {
   try {
-    await page.screenshot({ path: filename, fullPage: true });
+    await page.screenshot({ path: filename as `${string}.png`, fullPage: true });
     logger.debug(`Screenshot saved to ${filename}`);
   } catch (error) {
     logger.error('Failed to take screenshot', error);

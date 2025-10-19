@@ -12,6 +12,11 @@ export interface SleepMetrics {
   raw?: any; // For storing raw response data
 }
 
+export interface SleepDataBySleeper {
+  rafa: SleepMetrics;
+  miki: SleepMetrics;
+}
+
 export interface SleepIQCredentials {
   username: string;
   password: string;
