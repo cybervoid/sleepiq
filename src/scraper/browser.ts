@@ -48,6 +48,22 @@ export async function newPage(browser: Browser, options: ScraperOptions = {}): P
       logger.debug(`Request: ${request.method()} ${request.url()}`);
       request.continue();
     });
+    
+    // Monitor responses for login-related requests
+    page.on('response', async (response) => {
+      const url = response.url();
+      if (url.includes('login') || url.includes('auth') || url.includes('signin')) {
+        logger.debug(`Login Response: ${response.status()} ${url}`);
+        try {
+          const text = await response.text();
+          if (text.length < 500) {
+            logger.debug(`Response body: ${text}`);
+          }
+        } catch (error) {
+          logger.debug('Could not read response body');
+        }
+      }
+    });
   }
 
   return page;
