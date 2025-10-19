@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx scripts/run-local.ts",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "echo \"No tests specified\" && exit 0",
+    "test-login": "npm run build && node test-login.js"
   },
   "repository": {
     "type": "git",
