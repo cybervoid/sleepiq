@@ -1,5 +1,13 @@
 export interface SleepMetrics {
-  date: string;
+  '30-average': string;
+  'score': string;
+  'all-time-best': string;
+  'message': string;
+  'heartRateMsg': string;
+  'heartRateVariabilityMsg': string;
+  'breathRateMsg': string;
+  // Legacy fields (keeping for backward compatibility during transition)
+  date?: string;
   sleepScore?: number;
   durationMinutes?: number;
   timeInBedMinutes?: number;
@@ -9,7 +17,7 @@ export interface SleepMetrics {
   heartRateAvg?: number;
   respirationRateAvg?: number;
   outOfBedCount?: number;
-  raw?: any; // For storing raw response data
+  raw?: any;
 }
 
 export interface SleepDataBySleeper {

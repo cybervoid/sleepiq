@@ -6,10 +6,12 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx scripts/run-local.ts",
+    "clear-session": "tsx scripts/clear-session.ts",
     "test": "echo \"No tests specified\" && exit 0",
     "test-login": "npm run build && node test-login.js",
     "test-sleepers": "npm run build && node test-sleepers.js",
-    "example-sleepers": "npm run build && node example-sleepers.js"
+    "example-sleepers": "npm run build && node example-sleepers.js",
+    "scrape:sleepiq": "npm run build && node test-enhanced-scraper.js"
   },
   "repository": {
     "type": "git",

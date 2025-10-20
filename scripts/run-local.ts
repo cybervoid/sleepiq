@@ -32,10 +32,36 @@ async function main() {
     console.log(`Headless mode: ${options.headless}`);
     console.log(`Debug mode: ${options.debug}`);
     
-    const sleepMetrics = await scrapeSleepMetrics(credentials, options);
+    const sleepData = await scrapeSleepMetrics(credentials, options);
     
-    console.log('\\n=== SLEEP METRICS ===');
-    console.log(JSON.stringify(sleepMetrics, null, 2));
+    console.log('\n=== SLEEP DATA FOR BOTH SLEEPERS (REQUESTED JSON SCHEMA) ===');
+    
+    // Extract only the requested fields in the exact schema you wanted
+    const requestedSchema = {
+      rafa: {
+        "30-average": sleepData.rafa['30-average'],
+        "score": sleepData.rafa['score'],
+        "all-time-best": sleepData.rafa['all-time-best'],
+        "message": sleepData.rafa['message'],
+        "heartRateMsg": sleepData.rafa['heartRateMsg'],
+        "heartRateVariabilityMsg": sleepData.rafa['heartRateVariabilityMsg'],
+        "breathRateMsg": sleepData.rafa['breathRateMsg']
+      },
+      miki: {
+        "30-average": sleepData.miki['30-average'],
+        "score": sleepData.miki['score'],
+        "all-time-best": sleepData.miki['all-time-best'],
+        "message": sleepData.miki['message'],
+        "heartRateMsg": sleepData.miki['heartRateMsg'],
+        "heartRateVariabilityMsg": sleepData.miki['heartRateVariabilityMsg'],
+        "breathRateMsg": sleepData.miki['breathRateMsg']
+      }
+    };
+    
+    console.log(JSON.stringify(requestedSchema, null, 2));
+    
+    console.log('\n=== FULL EXTRACTION DATA (WITH DEBUG INFO) ===');
+    console.log(JSON.stringify(sleepData, null, 2));
     
   } catch (error) {
     console.error('\\n❌ Scraping failed:', error);

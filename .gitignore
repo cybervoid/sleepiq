@@ -10,3 +10,6 @@ coverage/
 cdk.out/
 .cdk.staging/
 build/
+
+# Session data
+.sessions/
