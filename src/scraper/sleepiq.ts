@@ -102,24 +102,39 @@ async function performLogin(
   
   await page.goto(SLEEPIQ_URLS.LOGIN, { waitUntil: 'networkidle2' });
   
-  // Clear all cookies and local storage after page loads to ensure clean session
+  // Clear all browser data to prevent autofill interference
   try {
+    // Clear all cookies
+    const client = await page.target().createCDPSession();
+    await client.send('Network.clearBrowserCookies');
+    await client.send('Network.clearBrowserCache');
+    await client.send('Storage.clearDataForOrigin', {
+      origin: 'https://sleepiq.sleepnumber.com',
+      storageTypes: 'all'
+    });
+    
     await page.evaluate(() => {
       // Clear localStorage
       localStorage.clear();
       // Clear sessionStorage
       sessionStorage.clear();
+      
+      // Clear any cached form data
+      if ('webkitStorageInfo' in window) {
+        // @ts-ignore
+        window.webkitStorageInfo.requestQuota(PERSISTENT, 0, () => {}, () => {});
+      }
     });
     
-    // Clear cookies
+    // Clear cookies via page API as backup
     const cookies = await page.cookies();
     if (cookies.length > 0) {
       await page.deleteCookie(...cookies);
     }
     
-    logger.debug('Browser session cleared successfully');
+    logger.debug('Browser data cleared successfully to prevent autofill');
   } catch (error) {
-    logger.debug('Could not clear browser session:', error);
+    logger.debug('Could not clear browser data:', error);
     // Continue anyway
   }
 
@@ -140,19 +155,54 @@ async function performLogin(
   const emailSelector = 'input[type="email"], input[name="email"], input[id*="email"]';
   const passwordSelector = 'input[type="password"], input[name="password"], input[id*="password"]';
   
-  // Clear and type email
+  // Disable autofill on the form before filling
+  await page.evaluate(() => {
+    const form = document.querySelector('form');
+    if (form) {
+      form.setAttribute('autocomplete', 'off');
+    }
+    
+    const inputs = document.querySelectorAll('input');
+    inputs.forEach(input => {
+      input.setAttribute('autocomplete', 'new-password');
+      input.setAttribute('data-form-type', 'other');
+    });
+  });
+  
+  // Wait a moment for autofill to settle
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
+  // Clear and type email with enhanced clearing
+  await page.evaluate((selector) => {
+    const input = document.querySelector(selector) as HTMLInputElement;
+    if (input) {
+      input.value = '';
+      input.setAttribute('value', '');
+    }
+  }, emailSelector);
+  
   await page.click(emailSelector);
   await page.keyboard.down('Control');
   await page.keyboard.press('KeyA');
   await page.keyboard.up('Control');
-  await page.type(emailSelector, credentials.username);
+  await page.keyboard.press('Delete');
+  await page.type(emailSelector, credentials.username, { delay: 50 });
   
-  // Clear and type password
+  // Clear and type password with enhanced clearing
+  await page.evaluate((selector) => {
+    const input = document.querySelector(selector) as HTMLInputElement;
+    if (input) {
+      input.value = '';
+      input.setAttribute('value', '');
+    }
+  }, passwordSelector);
+  
   await page.click(passwordSelector);
   await page.keyboard.down('Control');
   await page.keyboard.press('KeyA');
   await page.keyboard.up('Control');
-  await page.type(passwordSelector, credentials.password);
+  await page.keyboard.press('Delete');
+  await page.type(passwordSelector, credentials.password, { delay: 50 });
   
   // Trigger input events to ensure the SPA recognizes the changes
   await page.evaluate((emailSel, passSel) => {
@@ -850,251 +900,234 @@ async function openBiosignalsDetails(page: Page): Promise<{
   };
   
   try {
-    // First, try to scroll to find biosignals section
-    await page.evaluate(() => {
-      // Look for biosignals-related content and scroll it into view
-      const biosignalKeywords = ['biosignal', 'heart rate', 'variability', 'breath', 'breathing'];
-      
-      for (const keyword of biosignalKeywords) {
-        const elements = Array.from(document.querySelectorAll('*'));
-        const matchingElement = elements.find(el => 
-          el.textContent?.toLowerCase().includes(keyword)
-        );
-        
-        if (matchingElement) {
-          matchingElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          break;
-        }
-      }
-    });
+    const originalUrl = page.url();
+    logger.debug('Starting from URL:', originalUrl);
     
-    // Wait for scroll to complete
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Look for biosignals "View Details" button
-    const biosignalsButtonFound = await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      
-      for (const button of buttons) {
-        const buttonText = button.textContent?.trim().toLowerCase();
-        if (buttonText?.includes('view details') || buttonText?.includes('details')) {
-          // Check if this button is near biosignals content
-          const buttonArea = button.closest('div, section, article') || button.parentElement;
-          if (buttonArea) {
-            const areaText = buttonArea.textContent?.toLowerCase() || '';
-            // Check for biosignals indicators in the area
-            if (areaText.includes('biosignal') || 
-                areaText.includes('heart rate') ||
-                areaText.includes('variability') ||
-                areaText.includes('breath') ||
-                areaText.includes('respiratory')) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
-    });
-    
-    if (biosignalsButtonFound) {
-      logger.debug('Found biosignals View Details button, attempting to click...');
-      
-      // Try to click the biosignals details button
-      const clickResult = await withRetries(async () => {
-        const clicked = await page.evaluate(() => {
-          const buttons = Array.from(document.querySelectorAll('button'));
-          
-          for (const button of buttons) {
-            const buttonText = button.textContent?.trim().toLowerCase();
-            if (buttonText?.includes('view details') || buttonText?.includes('details')) {
-              const buttonArea = button.closest('div, section, article') || button.parentElement;
-              if (buttonArea) {
-                const areaText = buttonArea.textContent?.toLowerCase() || '';
-                if (areaText.includes('biosignal') || 
-                    areaText.includes('heart rate') ||
-                    areaText.includes('variability') ||
-                    areaText.includes('breath') ||
-                    areaText.includes('respiratory')) {
-                  (button as HTMLElement).click();
-                  return true;
-                }
-              }
-            }
-          }
-          return false;
-        });
-        
-        if (!clicked) {
-          throw new Error('Could not click biosignals details button');
-        }
-        
-        // Wait for modal to appear
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Check if modal opened
-        const modalExists = await page.$('[role="dialog"], .modal, .overlay');
-        return !!modalExists;
-      }, { maxAttempts: 2, delay: 1000 });
-      
-      if (clickResult) {
-        logger.debug('Successfully opened biosignals details modal');
-        
-        // Wait for content to load
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Extract messages from the modal
-        const biosignalMessages = await page.evaluate(() => {
-          const modal = document.querySelector('[role="dialog"], .modal, .overlay') as Element;
-          if (!modal) return { heartRate: '', hrv: '', breathRate: '' };
-          
-          const results = { heartRate: '', hrv: '', breathRate: '' };
-          
-          // Helper function to extract message from a section
-          function extractMessageFromSection(sectionKeywords: string[], messageLength = { min: 10, max: 300 }) {
-            const walker = document.createTreeWalker(
-              modal,
-              NodeFilter.SHOW_TEXT,
-              null
-            );
-            
-            let textNode;
-            const relevantTexts: string[] = [];
-            
-            while (textNode = walker.nextNode()) {
-              const text = textNode.textContent?.trim();
-              if (text && text.length >= messageLength.min && text.length <= messageLength.max) {
-                const lowerText = text.toLowerCase();
-                
-                // Check if text contains any of the section keywords
-                if (sectionKeywords.some(keyword => lowerText.includes(keyword))) {
-                  // Look for sentences or substantial text
-                  if (text.includes('.') || text.includes('!') || text.includes('?') || 
-                      lowerText.includes('your') || lowerText.includes('average') || 
-                      lowerText.includes('normal') || lowerText.includes('good') ||
-                      lowerText.includes('high') || lowerText.includes('low')) {
-                    relevantTexts.push(text);
-                  }
-                }
-              }
-            }
-            
-            // Return the most substantial/relevant text
-            if (relevantTexts.length > 0) {
-              return relevantTexts.sort((a, b) => b.length - a.length)[0];
-            }
-            return '';
-          }
-          
-          // Extract heart rate message
-          results.heartRate = extractMessageFromSection(
-            ['heart rate', 'heartrate', 'resting heart', 'bpm', 'beats per minute']
-          );
-          
-          // Extract HRV message
-          results.hrv = extractMessageFromSection(
-            ['heart rate variability', 'hrv', 'variability', 'recovery', 'readiness']
-          );
-          
-          // Extract breathing rate message
-          results.breathRate = extractMessageFromSection(
-            ['breathing rate', 'breath rate', 'respiratory', 'respiration', 'breaths per minute']
-          );
-          
-          return results;
-        });
-        
-        // Assign the extracted messages
-        results.heartRateMsg = biosignalMessages.heartRate || '';
-        results.heartRateVariabilityMsg = biosignalMessages.hrv || '';
-        results.breathRateMsg = biosignalMessages.breathRate || '';
-        
-        logger.debug('Extracted biosignal messages:', {
-          heartRate: results.heartRateMsg,
-          hrv: results.heartRateVariabilityMsg,
-          breathRate: results.breathRateMsg
-        });
-        
-        // Close the modal
-        await closeModal(page);
-      } else {
-        logger.debug('Could not open biosignals details modal');
-      }
+    // Direct navigation approach - construct the biosignals URL
+    let biosignalsUrl = originalUrl;
+    if (originalUrl.includes('#/pages/sleep')) {
+      biosignalsUrl = originalUrl.replace('#/pages/sleep', '#/pages/sleep/details/biosignals');
     } else {
-      logger.debug('No biosignals View Details button found');
+      const baseUrl = originalUrl.split('#')[0];
+      biosignalsUrl = baseUrl + '#/pages/sleep/details/biosignals';
     }
     
-    // If we couldn't get messages from modal, try to extract from dashboard directly
-    if (!results.heartRateMsg && !results.heartRateVariabilityMsg && !results.breathRateMsg) {
-      logger.debug('Attempting to extract biosignal messages directly from dashboard...');
+    logger.debug('Navigating directly to biosignals details page:', biosignalsUrl);
+    
+    try {
+      await page.goto(biosignalsUrl, { waitUntil: 'networkidle2' });
+      logger.debug('Successfully navigated to biosignals page');
+    } catch (error) {
+      logger.debug('Direct navigation failed, trying button click approach...', error);
       
-      const dashboardBiosignals = await page.evaluate(() => {
-        const results = { heartRate: '', hrv: '', breathRate: '' };
+      // Fallback to button click approach if direct navigation fails
+      const biosignalsButtonFound = await page.evaluate(() => {
+        // Look for View Details button specifically for biosignals
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        return allButtons.some(button => {
+          const buttonText = button.textContent?.toLowerCase() || '';
+          const parentText = button.parentElement?.textContent?.toLowerCase() || '';
+          return buttonText.includes('view details') && 
+                 (parentText.includes('biosignals') || parentText.includes('heart rate'));
+        });
+      });
+      
+      if (!biosignalsButtonFound) {
+        logger.debug('No biosignals View Details button found, skipping biosignals extraction');
+        return results;
+      }
+      
+      // Click the biosignals View Details button
+      const clicked = await page.evaluate(() => {
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        const biosignalsButton = allButtons.find(button => {
+          const buttonText = button.textContent?.toLowerCase() || '';
+          const parentText = button.parentElement?.textContent?.toLowerCase() || '';
+          return buttonText.includes('view details') && 
+                 (parentText.includes('biosignals') || parentText.includes('heart rate'));
+        });
         
-        // Look for any text mentioning biosignals on the dashboard
-        const walker = document.createTreeWalker(
-          document.body,
-          NodeFilter.SHOW_TEXT,
-          null
-        );
+        if (biosignalsButton) {
+          (biosignalsButton as HTMLElement).click();
+          return true;
+        }
+        return false;
+      });
+      
+      if (!clicked) {
+        logger.debug('Could not click biosignals View Details button');
+        return results;
+      }
+      
+      // Wait for navigation after button click
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    
+    // Wait for the biosignals page to fully load
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Verify we're on the biosignals details page
+    const currentUrl = page.url();
+    logger.debug('Current URL after navigation:', currentUrl);
+    
+    if (!currentUrl.includes('biosignals')) {
+      logger.debug('Not on biosignals details page, URL:', currentUrl);
+      return results;
+    }
+    
+    logger.debug('Successfully on biosignals details page');
+    
+    // Function to extract message from current active tab
+    const extractCurrentTabMessage = async () => {
+      return await page.evaluate(() => {
+        // Look for message text in the active tab content area
+        // Based on MCP observation, the message is in the main content area
+        const contentDiv = document.querySelector('div[class*="317"]') || 
+                          document.querySelector('div[class*="content"]') ||
+                          document.querySelector('div.generic');
         
-        let textNode;
-        while (textNode = walker.nextNode()) {
-          const text = textNode.textContent?.trim();
-          if (text && text.length > 15 && text.length < 200) {
-            const lowerText = text.toLowerCase();
-            
-            // Check for heart rate messages
-            if (!results.heartRate && 
-                (lowerText.includes('heart rate') || lowerText.includes('bpm')) &&
-                (lowerText.includes('average') || lowerText.includes('normal') || 
-                 lowerText.includes('high') || lowerText.includes('low'))) {
-              results.heartRate = text;
-            }
-            
-            // Check for HRV messages
-            if (!results.hrv && 
-                (lowerText.includes('variability') || lowerText.includes('hrv')) &&
-                (lowerText.includes('recovery') || lowerText.includes('stress') ||
-                 lowerText.includes('readiness'))) {
-              results.hrv = text;
-            }
-            
-            // Check for breathing rate messages
-            if (!results.breathRate && 
-                (lowerText.includes('breath') || lowerText.includes('respiratory')) &&
-                (lowerText.includes('rate') || lowerText.includes('pattern'))) {
-              results.breathRate = text;
+        if (contentDiv) {
+          const textElements = Array.from(contentDiv.querySelectorAll('*')).filter(el => {
+            const text = el.textContent?.trim();
+            return text && text.length > 40 && text.length < 500 &&
+                   (text.includes('heart rate') || text.includes('HRV') || text.includes('breath rate') ||
+                    text.includes('efficiently') || text.includes('variability') || text.includes('SleepIQ') ||
+                    text.includes('average range') || text.includes('working more') || text.includes('impacted')) &&
+                   (text.includes('.') || text.includes('!')) &&
+                   !text.includes('30-day') && !text.includes('Why is') && !text.includes('BPM') &&
+                   !text.includes('Trends') && !text.includes('Min') && !text.includes('Max');
+          });
+          
+          // Return the first matching message
+          for (const element of textElements) {
+            const text = element.textContent?.trim();
+            if (text && !text.includes('\n') && text.length > 40) {
+              console.log('Found biosignals message:', text);
+              return text;
             }
           }
         }
         
-        return results;
+        // Fallback: look anywhere on the page for characteristic messages
+        const allText = document.body.innerText;
+        
+        // Heart Rate message patterns
+        if (allText.includes('heart is working more efficiently')) {
+          const match = allText.match(/A lower heart rate generally means your heart is working more efficiently\. That's great news!/i);
+          if (match) return match[0];
+        }
+        
+        // HRV message patterns
+        if (allText.includes('HRV can be impacted')) {
+          const match = allText.match(/HRV can be impacted by the quality of your sleep\. Your HRV is in the mid-range, so way to go\./i);
+          if (match) return match[0];
+        }
+        
+        // Breath Rate message patterns
+        if (allText.includes('SleepIQ') && allText.includes('breath rate') && allText.includes('average range')) {
+          const match = allText.match(/Your SleepIQ[®]? score was positively affected because your breath rate was within your average range\. Sometimes, average is good!/i);
+          if (match) return match[0];
+        }
+        
+        console.log('No specific biosignals message found');
+        return '';
+      });
+    };
+    
+    // Extract Heart Rate message (should be default active tab)
+    logger.debug('Extracting Heart Rate message...');
+    const heartRateMessage = await extractCurrentTabMessage();
+    results.heartRateMsg = heartRateMessage;
+    logger.debug('Heart Rate message extracted:', heartRateMessage);
+    
+    // Click on Heart Rate Variability tab and extract message
+    logger.debug('Clicking on Heart Rate Variability tab...');
+    try {
+      const hrvTabClicked = await page.evaluate(() => {
+        // Look for HRV tab using the exact text we saw in MCP
+        const allElements = Array.from(document.querySelectorAll('*'));
+        const hrvTab = allElements.find(el => {
+          const text = el.textContent?.trim();
+          return text === 'Heart Rate Variability' && 
+                 (el.tagName === 'GENERIC' || el.classList.length > 0);
+        });
+        
+        if (hrvTab) {
+          (hrvTab as HTMLElement).click();
+          console.log('Clicked HRV tab');
+          return true;
+        }
+        console.log('HRV tab not found');
+        return false;
       });
       
-      // Use dashboard messages if found
-      if (dashboardBiosignals.heartRate) results.heartRateMsg = dashboardBiosignals.heartRate;
-      if (dashboardBiosignals.hrv) results.heartRateVariabilityMsg = dashboardBiosignals.hrv;
-      if (dashboardBiosignals.breathRate) results.breathRateMsg = dashboardBiosignals.breathRate;
+      if (hrvTabClicked) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const hrvMessage = await extractCurrentTabMessage();
+        results.heartRateVariabilityMsg = hrvMessage;
+        logger.debug('HRV message extracted:', hrvMessage);
+      }
+    } catch (error) {
+      logger.debug('Could not extract HRV message:', error);
+    }
+    
+    // Click on Breath Rate tab and extract message
+    logger.debug('Clicking on Breath Rate tab...');
+    try {
+      const breathTabClicked = await page.evaluate(() => {
+        const allElements = Array.from(document.querySelectorAll('*'));
+        const breathTab = allElements.find(el => {
+          const text = el.textContent?.trim();
+          return text === 'Breath Rate' && 
+                 (el.tagName === 'GENERIC' || el.classList.length > 0);
+        });
+        
+        if (breathTab) {
+          (breathTab as HTMLElement).click();
+          console.log('Clicked Breath Rate tab');
+          return true;
+        }
+        console.log('Breath Rate tab not found');
+        return false;
+      });
+      
+      if (breathTabClicked) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const breathMessage = await extractCurrentTabMessage();
+        results.breathRateMsg = breathMessage;
+        logger.debug('Breath Rate message extracted:', breathMessage);
+      }
+    } catch (error) {
+      logger.debug('Could not extract breath rate message:', error);
+    }
+    
+    logger.debug('Final biosignals extraction results:', {
+      heartRate: results.heartRateMsg ? results.heartRateMsg.substring(0, 50) + '...' : 'empty',
+      hrv: results.heartRateVariabilityMsg ? results.heartRateVariabilityMsg.substring(0, 50) + '...' : 'empty',
+      breathRate: results.breathRateMsg ? results.breathRateMsg.substring(0, 50) + '...' : 'empty'
+    });
+    
+    // Navigate back to dashboard
+    try {
+      if (originalUrl !== currentUrl) {
+        logger.debug('Navigating back to dashboard...');
+        await page.goto(originalUrl, { waitUntil: 'networkidle2' });
+        logger.debug('Successfully navigated back to dashboard');
+      }
+    } catch (error) {
+      logger.debug('Error navigating back to dashboard:', error);
     }
     
   } catch (error) {
     logger.warn('Error extracting biosignals messages:', error);
-    
-    // Try to close any open modals
-    try {
-      await closeModal(page);
-    } catch (closeError) {
-      // Ignore modal close errors
-    }
   }
   
-  // Clean up messages (normalize whitespace and remove trailing punctuation)
+  // Clean up messages (normalize whitespace)
   Object.keys(results).forEach(key => {
     const typedKey = key as keyof typeof results;
     if (results[typedKey]) {
       results[typedKey] = results[typedKey]
         .replace(/\s+/g, ' ')
-        .replace(/[.!]+$/, '')
         .trim();
     }
   });
