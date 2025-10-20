@@ -39,9 +39,56 @@ export async function scrapeSleepMetrics(
         
         // Navigate to dashboard if not already there
         const currentUrl = page.url();
-        if (!currentUrl.includes('pages/sleep') && !currentUrl.includes('dashboard')) {
-          logger.info('Navigating to sleep dashboard');
-          await page.goto(SLEEPIQ_URLS.DASHBOARD, { waitUntil: 'networkidle2' });
+        logger.debug('Current URL after session restore:', currentUrl);
+        
+        // Always navigate to the sleep dashboard to ensure we're in the right place
+        logger.info('Navigating to sleep dashboard');
+        await page.goto(SLEEPIQ_URLS.DASHBOARD, { waitUntil: 'networkidle2' });
+        
+        // Wait a bit for the dashboard to fully load
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        const finalUrl = page.url();
+        logger.debug('Final URL after navigation:', finalUrl);
+        
+        // Handle sleeper selection page if we end up there
+        if (finalUrl.includes('select-default-sleeper')) {
+          logger.info('On sleeper selection page, selecting default sleeper...');
+          
+          try {
+            // Try to find and click a sleeper selection button or continue
+            const sleeperSelected = await page.evaluate(() => {
+              // Look for buttons or clickable elements that might advance us
+              const buttons = Array.from(document.querySelectorAll('button, [role="button"], .btn, .continue, .next'));
+              
+              for (const button of buttons) {
+                const text = (button as HTMLElement).textContent?.toLowerCase() || '';
+                const htmlButton = button as HTMLElement;
+                
+                // Look for continue, next, or sleeper names
+                if (text.includes('continue') || text.includes('next') || text.includes('rafa') || text.includes('miki')) {
+                  htmlButton.click();
+                  return true;
+                }
+              }
+              
+              // If no specific button found, click the first available sleeper or continue button
+              if (buttons.length > 0) {
+                (buttons[0] as HTMLElement).click();
+                return true;
+              }
+              
+              return false;
+            });
+            
+            if (sleeperSelected) {
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              await page.goto(SLEEPIQ_URLS.DASHBOARD, { waitUntil: 'networkidle2' });
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+          } catch (error) {
+            logger.warn('Could not handle sleeper selection page:', error);
+          }
         }
       } else {
         logger.info('Session restoration failed, proceeding with login');
@@ -132,7 +179,7 @@ async function performLogin(
       await page.deleteCookie(...cookies);
     }
     
-    logger.debug('Browser data cleared successfully to prevent autofill');
+    logger.info('Browser data cleared to prevent autofill');
   } catch (error) {
     logger.debug('Could not clear browser data:', error);
     // Continue anyway
@@ -142,7 +189,6 @@ async function performLogin(
   await page.waitForSelector('input[type="email"], input[name="email"], input[id*="email"]', { timeout: 10000 });
   
   // Wait for the form to be fully interactive
-  logger.debug('Waiting for form to be interactive...');
   await page.waitForFunction(() => {
     const emailInput = document.querySelector('input[type="email"], input[name="email"], input[id*="email"]') as HTMLInputElement;
     const passwordInput = document.querySelector('input[type="password"], input[name="password"], input[id*="password"]') as HTMLInputElement;
@@ -254,7 +300,10 @@ async function performLogin(
     return { buttons, loginElements };
   });
   
-  logger.debug('Available elements:', JSON.stringify(pageInfo, null, 2));
+  // Only show available elements if login fails
+  if (process.env.VERBOSE_LOGIN === 'true') {
+    logger.debug('Available elements:', JSON.stringify(pageInfo, null, 2));
+  }
   
   // Try to find and click the login button
   let buttonClicked = false;
@@ -705,18 +754,24 @@ async function extractSleepData(page: Page): Promise<SleepMetrics> {
     sleepMetrics['score'] = dashboardData.sleepScore;
     sleepMetrics['all-time-best'] = dashboardData.allTimeBest;
     
-    logger.debug('Dashboard extraction results:', {
-      'thirtyDayAvg': dashboardData.thirtyDayAvg,
-      'sleepScore': dashboardData.sleepScore,
-      'allTimeBest': dashboardData.allTimeBest,
-      'debugInfo': dashboardData.debugInfo
-    });
+    // Only log detailed extraction results if extraction fails or verbose mode is enabled
+    if (process.env.VERBOSE_EXTRACTION === 'true' || !dashboardData.thirtyDayAvg) {
+      logger.debug('Dashboard extraction results:', {
+        'thirtyDayAvg': dashboardData.thirtyDayAvg,
+        'sleepScore': dashboardData.sleepScore,
+        'allTimeBest': dashboardData.allTimeBest
+      });
+    }
     
-    logger.debug('Extracted dashboard metrics:', {
-      '30-average': sleepMetrics['30-average'],
-      'score': sleepMetrics['score'],
-      'all-time-best': sleepMetrics['all-time-best']
-    });
+    if (sleepMetrics['30-average'] && sleepMetrics['score'] && sleepMetrics['all-time-best']) {
+      logger.info('Dashboard metrics extracted successfully');
+    } else {
+      logger.debug('Extracted dashboard metrics:', {
+        '30-average': sleepMetrics['30-average'],
+        'score': sleepMetrics['score'],
+        'all-time-best': sleepMetrics['all-time-best']
+      });
+    }
     
     // Store raw data for debugging
     const pageText = await page.evaluate(() => document.body.innerText);
@@ -739,23 +794,20 @@ async function extractSleepData(page: Page): Promise<SleepMetrics> {
  * Open sleep session details and extract the general sleep message
  */
 async function openSleepSessionDetails(page: Page): Promise<string> {
-  logger.debug('Attempting to extract sleep session message from Sleep Session details page...');
+  if (process.env.VERBOSE_NAVIGATION === 'true') {
+    logger.debug('Attempting to extract sleep session message from Sleep Session details page...');
+  }
   
   try {
     // Store the current URL to navigate back later
     const originalUrl = page.url();
-    logger.debug('Original URL:', originalUrl);
     
     // Navigate directly to the Sleep Session details page instead of clicking buttons
-    logger.debug('Navigating directly to Sleep Session details page...');
-    
     const sleepSessionUrl = originalUrl.replace('#/pages/sleep', '#/pages/sleep/details/sleep-session');
-    logger.debug('Target sleep session URL:', sleepSessionUrl);
     
     try {
       // Navigate directly to the sleep session details page
       await page.goto(sleepSessionUrl, { waitUntil: 'networkidle2' });
-      logger.debug('Successfully navigated to sleep session details page');
     } catch (error) {
       logger.debug('Direct navigation failed, trying alternative URL construction:', error);
       
@@ -1653,44 +1705,60 @@ async function selectSleeper(page: Page, sleeperName: string): Promise<boolean> 
   logger.debug(`Attempting to select sleeper: ${sleeperName}`);
   
   try {
-    // Try to find and click the sleeper selector
-    const sleeperSelected = await withRetries(async () => {
-      const selected = await page.evaluate((name) => {
-        // Strategy 1: Look for dropdown options
-        const dropdowns = Array.from(document.querySelectorAll('select, [role="combobox"]'));
-        for (const dropdown of dropdowns) {
-          const options = Array.from(dropdown.querySelectorAll('option'));
-          const matchingOption = options.find(opt => 
-            opt.textContent?.toLowerCase().includes(name.toLowerCase())
-          );
-          if (matchingOption) {
-            (dropdown as HTMLSelectElement).value = (matchingOption as HTMLOptionElement).value;
-            dropdown.dispatchEvent(new Event('change', { bubbles: true }));
-            return true;
-          }
-        }
+    // Step 1: Find and click the sleeper dropdown to open it
+    const dropdownFound = await page.evaluate(() => {
+      const allElements = Array.from(document.querySelectorAll('*'));
+      
+      for (const el of allElements) {
+        const text = el.textContent?.trim().toLowerCase() || '';
+        const htmlEl = el as HTMLElement;
         
-        // Strategy 2: Look for clickable elements with the sleeper name
-        const allElements = Array.from(document.querySelectorAll('*'));
-        const matchingElement = allElements.find(el => {
-          const text = el.textContent?.trim().toLowerCase();
-          return text?.includes(name.toLowerCase()) && 
-                 (el.tagName === 'BUTTON' || 
-                  el.getAttribute('role') === 'button' ||
-                  el.classList.contains('clickable') ||
-                  window.getComputedStyle(el).cursor === 'pointer');
-        });
-        
-        if (matchingElement) {
-          (matchingElement as HTMLElement).click();
+        // Look for elements that contain sleeper names and have dropdown indicators
+        if ((text.includes('rafa') || text.includes('miki')) && 
+            (text.includes('▼') || htmlEl.classList.toString().includes('dropdown') ||
+             htmlEl.getAttribute('role') === 'button' || el.tagName === 'BUTTON' ||
+             window.getComputedStyle(htmlEl).cursor === 'pointer')) {
+          console.log('Found sleeper dropdown button:', text);
+          htmlEl.click();
           return true;
         }
-        
-        return false;
-      }, sleeperName);
+      }
+      return false;
+    });
+    
+    if (!dropdownFound) {
+      logger.debug('Could not find sleeper dropdown button');
+      return false;
+    }
+    
+    // Step 2: Wait for dropdown to open, then find and click the target sleeper
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const sleeperSelected = await page.evaluate((name) => {
+      const allElements = Array.from(document.querySelectorAll('*'));
       
-      return selected;
-    }, { maxAttempts: 2, delay: 1000 });
+      for (const el of allElements) {
+        const text = el.textContent?.trim().toLowerCase() || '';
+        const htmlEl = el as HTMLElement;
+        
+        // Look for clickable element with the target sleeper name
+        if (text === name.toLowerCase() && 
+            (htmlEl.offsetWidth > 0 && htmlEl.offsetHeight > 0) &&
+            (el.tagName === 'BUTTON' || htmlEl.getAttribute('role') === 'button' ||
+             htmlEl.classList.contains('clickable') || 
+             window.getComputedStyle(htmlEl).cursor === 'pointer')) {
+          console.log(`Clicking sleeper option: ${text}`);
+          htmlEl.click();
+          return true;
+        }
+      }
+      return false;
+    }, sleeperName);
+    
+    if (!sleeperSelected) {
+      logger.debug(`Could not find clickable option for ${sleeperName}`);
+      return false;
+    }
     
     if (sleeperSelected) {
       // Wait for the dashboard to update
@@ -1710,7 +1778,7 @@ async function selectSleeper(page: Page, sleeperName: string): Promise<boolean> 
  * Enhanced function to extract sleep data for both sleepers using orchestrated approach
  */
 async function extractSleepDataForBothSleepersEnhanced(page: Page): Promise<SleepDataBySleeper> {
-  logger.debug('Starting enhanced sleep data extraction for both sleepers...');
+  logger.info('Extracting sleep data for both sleepers...');
   
   const sleepData: SleepDataBySleeper = {
     rafa: {
@@ -1757,15 +1825,10 @@ async function extractSleepDataForBothSleepersEnhanced(page: Page): Promise<Slee
         // Assign the data
         sleepData[sleeper] = sleeperData;
         
-        logger.debug(`Completed data extraction for ${sleeper}:`, {
-          '30-average': sleeperData['30-average'],
-          'score': sleeperData['score'],
-          'all-time-best': sleeperData['all-time-best'],
-          'message': sleeperData['message'] ? 'present' : 'empty',
-          'heartRateMsg': sleeperData['heartRateMsg'] ? 'present' : 'empty',
-          'heartRateVariabilityMsg': sleeperData['heartRateVariabilityMsg'] ? 'present' : 'empty',
-          'breathRateMsg': sleeperData['breathRateMsg'] ? 'present' : 'empty',
-        });
+        // Log completion status
+        const hasAllData = sleeperData['30-average'] && sleeperData['score'] && sleeperData['all-time-best'] && 
+                          sleeperData['message'] && sleeperData['heartRateMsg'] && sleeperData['breathRateMsg'];
+        logger.info(`Data extraction for ${sleeper}: ${hasAllData ? '✓ Complete' : '⚠ Partial'}`);
         
       } catch (error) {
         logger.error(`Error extracting data for ${sleeper}:`, error);
@@ -1783,8 +1846,7 @@ async function extractSleepDataForBothSleepersEnhanced(page: Page): Promise<Slee
       miki: sleepData.miki
     };
     
-    logger.info('Enhanced sleep data extraction completed');
-    logger.debug('Final results structure:', JSON.stringify(finalResult, null, 2));
+    logger.info('Sleep data extraction completed successfully');
     
     return finalResult;
     

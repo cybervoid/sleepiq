@@ -1,6 +1,6 @@
 export const SLEEPIQ_URLS = {
   LOGIN: 'https://sleepiq.sleepnumber.com/#/login',
-  DASHBOARD: 'https://sleepiq.sleepnumber.com/#/dashboard',
+  DASHBOARD: 'https://sleepiq.sleepnumber.com/#/pages/sleep',
   BASE: 'https://sleepiq.sleepnumber.com'
 } as const;
 

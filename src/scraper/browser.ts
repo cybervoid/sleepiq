@@ -87,27 +87,23 @@ export async function newPage(browser: Browser, options: ScraperOptions = {}): P
     });
   });
   
-  // Enable request interception for debugging
-  if (process.env.LOG_LEVEL === 'debug') {
+  // Enable minimal request logging for debugging
+  if (process.env.LOG_LEVEL === 'debug' && process.env.VERBOSE_REQUESTS === 'true') {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
-      logger.debug(`Request: ${request.method()} ${request.url()}`);
+      // Only log important requests (auth, API calls)
+      const url = request.url();
+      if (url.includes('login') || url.includes('auth') || url.includes('signin') || url.includes('api')) {
+        logger.debug(`Request: ${request.method()} ${url}`);
+      }
       request.continue();
     });
     
-    // Monitor responses for login-related requests
+    // Monitor responses for login-related requests only
     page.on('response', async (response) => {
       const url = response.url();
       if (url.includes('login') || url.includes('auth') || url.includes('signin')) {
         logger.debug(`Login Response: ${response.status()} ${url}`);
-        try {
-          const text = await response.text();
-          if (text.length < 500) {
-            logger.debug(`Response body: ${text}`);
-          }
-        } catch (error) {
-          logger.debug('Could not read response body');
-        }
       }
     });
   }

@@ -34,10 +34,8 @@ async function main() {
     
     const sleepData = await scrapeSleepMetrics(credentials, options);
     
-    console.log('\n=== SLEEP DATA FOR BOTH SLEEPERS (REQUESTED JSON SCHEMA) ===');
-    
-    // Extract only the requested fields in the exact schema you wanted
-    const requestedSchema = {
+    // Return the clean JSON structure as documented (same as API response)
+    const apiResponse = {
       rafa: {
         "30-average": sleepData.rafa['30-average'],
         "score": sleepData.rafa['score'],
@@ -58,10 +56,30 @@ async function main() {
       }
     };
     
-    console.log(JSON.stringify(requestedSchema, null, 2));
+    // Show pretty summary if requested, otherwise show raw JSON
+    if (process.env.SHOW_SUMMARY === 'true') {
+      console.log('\n✅ Sleep data extraction completed successfully!\n');
+      
+      // Show compact summary for each sleeper
+      Object.entries(sleepData).forEach(([sleeperName, data]) => {
+        console.log(`📊 ${sleeperName.toUpperCase()}:`);
+        console.log(`   • 30-day average: ${data['30-average']}`);
+        console.log(`   • SleepIQ score: ${data['score']}`);
+        console.log(`   • All-time best: ${data['all-time-best']}`);
+        console.log(`   • Sleep message: ${data.message ? '✓' : '✗'}`);
+        console.log(`   • Biosignals: ${data.heartRateMsg && data.heartRateVariabilityMsg && data.breathRateMsg ? '✓' : '✗'}`);
+        console.log('');
+      });
+    } else {
+      // Default: Output raw JSON (what the API will return)
+      console.log('\n' + JSON.stringify(apiResponse, null, 2));
+    }
     
-    console.log('\n=== FULL EXTRACTION DATA (WITH DEBUG INFO) ===');
-    console.log(JSON.stringify(sleepData, null, 2));
+    // Show debug data if requested
+    if (process.env.SHOW_DEBUG_DATA === 'true') {
+      console.log('\n=== FULL EXTRACTION DATA (WITH DEBUG INFO) ===');
+      console.log(JSON.stringify(sleepData, null, 2));
+    }
     
   } catch (error) {
     console.error('\\n❌ Scraping failed:', error);

@@ -94,6 +94,18 @@ Each sleeper's data follows the same `SleepMetrics` structure as the original si
 - `HEADLESS` - Set to `false` to see browser during development
 - `TIMEOUT` - Request timeout in milliseconds (default: 30000)
 
+### Logging Controls (Optional)
+For cleaner output, you can control specific logging areas:
+- `VERBOSE_REQUESTS=true` - Show all network requests (can be very verbose)
+- `VERBOSE_LOGIN=true` - Show detailed login form interactions
+- `VERBOSE_EXTRACTION=true` - Show detailed data extraction debug info
+- `VERBOSE_NAVIGATION=true` - Show detailed page navigation steps
+
+### Output Format Controls
+- **Default**: Raw JSON output (same as API response)
+- `SHOW_SUMMARY=true` - Show pretty summary instead of raw JSON  
+- `SHOW_DEBUG_DATA=true` - Include full debug data with raw extraction info
+
 ## Debugging
 
 ### Visual Debugging
@@ -144,14 +156,46 @@ scripts/
 - Check your internet connection
 - SleepIQ servers may be slow or down
 
-## Next Steps
+## API Deployment
 
-This is currently set up for local testing. To deploy to AWS Lambda:
+This scraper is ready for deployment as an API endpoint that returns JSON responses.
 
-1. Set up AWS CDK infrastructure (planned)
-2. Configure AWS Secrets Manager for credentials
-3. Deploy Lambda function with Chromium layer
-4. Set up API Gateway for HTTP access (optional)
+### Test API Response Format
+```bash
+# Test the JSON API response locally
+yarn test-api
+```
+
+### Deploy to Cloud Platforms
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions on deploying to:
+- **AWS Lambda** (recommended for cost and performance)
+- **Cloudflare Workers** (great free tier)
+- **Vercel** (easy deployment)
+- **Railway** (simple hosting)
+- **Heroku** (traditional PaaS)
+
+### API Response Format
+
+The API returns standardized JSON with this structure:
+```json
+{
+  "success": true,
+  "data": {
+    "rafa": {
+      "30-average": "69",
+      "score": "73",
+      "all-time-best": "88",
+      "message": "Sleep message text...",
+      "heartRateMsg": "Heart rate message...",
+      "heartRateVariabilityMsg": "HRV message...",
+      "breathRateMsg": "Breath rate message..."
+    },
+    "miki": { /* same structure */ }
+  },
+  "timestamp": "2025-10-20T19:25:10.215Z"
+}
+```
 
 ## Security Notes
 

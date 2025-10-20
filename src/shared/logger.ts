@@ -44,4 +44,14 @@ class Logger {
 }
 
 const logLevel = (process.env.LOG_LEVEL as LogLevel) || 'info';
+
+// Configuration flags for controlling specific logging areas
+export const logConfig = {
+  verboseRequests: process.env.VERBOSE_REQUESTS === 'true',
+  verboseLogin: process.env.VERBOSE_LOGIN === 'true',
+  verboseExtraction: process.env.VERBOSE_EXTRACTION === 'true',
+  verboseNavigation: process.env.VERBOSE_NAVIGATION === 'true',
+  showFullResults: process.env.SHOW_FULL_RESULTS === 'true'
+};
+
 export const logger = new Logger(logLevel);
