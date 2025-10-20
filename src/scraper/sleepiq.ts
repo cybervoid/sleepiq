@@ -739,53 +739,45 @@ async function openSleepSessionDetails(page: Page): Promise<string> {
     // Extract the message from the details page
     logger.debug('Extracting message from page...');
     const sleepMessage = await page.evaluate(() => {
-      console.log('Current page title:', document.title);
-      console.log('Current URL:', window.location.href);
-      console.log('Page body text length:', document.body.innerText.length);
+      // Try the specific selector first
+      const messageElement = document.querySelector('span.siq-text-900.fs-16.white.mt-24.p-12.text-center');
+      if (messageElement) {
+        const text = messageElement.textContent?.trim() || '';
+        console.log('Found message using specific selector:', text);
+        return text;
+      }
       
-      // Look for the specific message patterns we found via MCP
+      // Fallback: look for any span with similar classes that contains sleep advice
+      const fallbackElements = document.querySelectorAll('span.siq-text-900');
+      for (const element of fallbackElements) {
+        const text = element.textContent?.trim() || '';
+        // Look for message-like text (longer than 20 chars, contains advice/feedback)
+        if (text.length > 20 && text.length < 300 && 
+            (text.includes('you') || text.includes('your')) && 
+            (text.includes('sleep') || text.includes('restless') || text.includes('bed')) &&
+            !text.includes('30-day') && !text.includes('SleepIQ') && 
+            !text.includes('PM') && !text.includes('AM') && 
+            !text.includes('Average') && !text.includes('Details') &&
+            !text.includes('Wind down') && !text.includes('Workout')) {
+          console.log('Found message using fallback selector:', text);
+          return text;
+        }
+      }
+      
+      // Final fallback: use regex patterns but be more specific
       const pageText = document.body.innerText;
-      
-      // Pattern matching based on the messages we saw:
-      // "You were more restless than normal. Is there a change you can make to your sleep routine to get back on track?"
-      // "Your restless sleep was higher, but you can get back on track. If stress is keeping you up, reading before bed may help you relax and fall asleep faster."
-      
       const messagePatterns = [
-        /You were more restless than normal\.[^.]*\./, 
+        /You were more restless than normal\. Is there a change you can make to your sleep routine to get back on track\?/,
+        /You had fewer bed exits than your average, which may help you achieve your sleep goal more often\./,
         /Your restless sleep was higher[^.]*\.[^.]*\./,
-        /(?:You|Your)[^.]*(?:restless|sleep)[^.]*(?:routine|track)[^.]*\./,
-        /(?:You|Your)[^.]*(?:sleep|bed)[^.]*(?:help|relax)[^.]*\./
+        /(?:You|Your)[^.]*(?:restless|sleep)[^.]*(?:routine|track|average|goal)[^.]*\./
       ];
       
       for (const pattern of messagePatterns) {
         const match = pageText.match(pattern);
         if (match) {
-          console.log('Found message using pattern:', pattern.source);
-          console.log('Message:', match[0]);
+          console.log('Found message using pattern:', match[0]);
           return match[0].trim();
-        }
-      }
-      
-      // Fallback: Look for standalone meaningful text elements
-      const allElements = Array.from(document.querySelectorAll('*'));
-      
-      for (const element of allElements) {
-        const text = element.textContent?.trim();
-        if (text && text.length > 40 && text.length < 300) {
-          const lowerText = text.toLowerCase();
-          
-          // Check if this looks like a sleep advice message
-          if ((lowerText.includes('you') || lowerText.includes('your')) &&
-              (lowerText.includes('sleep') || lowerText.includes('restless')) &&
-              (text.includes('?') || text.includes('.')) &&
-              !lowerText.includes('30-day') &&
-              !lowerText.includes('sleepiq') &&
-              !lowerText.includes('contact') &&
-              !lowerText.includes('privacy')) {
-            
-            console.log('Found potential sleep message element:', text);
-            return text;
-          }
         }
       }
       
