@@ -31,12 +31,15 @@ export async function extractBiosignalsMessagesImproved(page: Page): Promise<{
       logger.debug('Already on biosignals page');
     } else if (originalUrl.includes('#/pages/sleep')) {
       biosignalsUrl = originalUrl.replace('#/pages/sleep', '#/pages/sleep/details/biosignals');
-      logger.debug('Navigating to biosignals page:', biosignalsUrl);
+    logger.debug('Navigating to biosignals page:', biosignalsUrl);
+      // Disable cache for fresh content
+      await page.setCacheEnabled(false);
       await page.goto(biosignalsUrl, { waitUntil: 'networkidle2' });
     } else {
       logger.warn('Not on expected sleep pages, attempting direct navigation');
       const baseUrl = originalUrl.split('#')[0];
       biosignalsUrl = baseUrl + '#/pages/sleep/details/biosignals';
+      await page.setCacheEnabled(false);
       await page.goto(biosignalsUrl, { waitUntil: 'networkidle2' });
     }
 
@@ -241,10 +244,13 @@ export async function extractSleepSessionMessageImproved(page: Page): Promise<st
     }
     
     logger.debug('Navigating to sleep session page:', sleepSessionUrl);
-    // Always navigate to force a fresh page load, even if already there
+    
+    // Disable cache to get fresh content
+    await page.setCacheEnabled(false);
+    
+    // Navigate to sleep session details page
     await page.goto(sleepSessionUrl, { 
       waitUntil: 'networkidle2',
-      // Force fresh load by clearing cache
     });
     
     // Wait for page to fully load and render
@@ -260,8 +266,10 @@ export async function extractSleepSessionMessageImproved(page: Page): Promise<st
 
     // Extract the main coaching message
     const message = await page.evaluate(() => {
-      // Look for the main message that appears between the metrics and the sleep timeline
-      // It should be a standalone text element that's advice-like
+      // The message appears right after the metrics section and before the sleep timeline
+      // It's a short coaching message (1-2 sentences)
+      // It does NOT include "Did you know?" which is at the bottom
+      
       const allElements = Array.from(document.querySelectorAll('*'));
       
       for (const element of allElements) {
@@ -271,23 +279,41 @@ export async function extractSleepSessionMessageImproved(page: Page): Promise<st
         // Skip if not visible
         if (elementRect.width === 0 || elementRect.height === 0) continue;
         
-        // Look for message-like content that's advice/coaching
-        if (text.length > 50 && text.length < 400 && 
+        // Look for the coaching message - it's between 20-200 characters typically
+        // and ends with . or !
+        if (text.length >= 20 && text.length <= 200 && 
             (text.endsWith('.') || text.endsWith('!'))) {
           
-          // Skip metric labels and numbers
-          if (/^\d+/.test(text) || 
-              text.includes('30-day') ||
-              text.includes('SleepIQ') && text.includes('score') ||
+          // Skip if it's a metric label
+          if (text.includes('30-day') || 
               text.includes('All-time') ||
               text.includes('Details') ||
-              text.includes('h ') || // time indicators like "7h 50m"
-              text.includes('PM') || text.includes('AM')) {
+              text.includes('Time in bed') ||
+              text.includes('Sleep Number') ||
+              text.includes('Exit at') ||
+              /\d+h \d+m/.test(text) || // time format like "8h 54m"
+              /^\d/.test(text)) { // starts with number
             continue;
           }
           
-          // This looks like a coaching message
-          console.log('Found sleep session message:', text.substring(0, 50) + '...');
+          // Skip "Did you know?" and similar tips
+          if (text.includes('Did you know?') || 
+              text.includes('Why your sleep matters')) {
+            continue;
+          }
+          
+          // Skip if it contains child text patterns that indicate it's a container
+          const childrenText = Array.from(element.children)
+            .map(child => child.textContent?.trim())
+            .join(' ');
+          if (childrenText.includes('Details') || 
+              childrenText.includes('Restful') ||
+              childrenText.includes('Restless')) {
+            continue;
+          }
+          
+          // This looks like the coaching message
+          console.log('Found sleep session message:', text);
           return text;
         }
       }
