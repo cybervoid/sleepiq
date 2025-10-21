@@ -91,13 +91,14 @@ export class SessionManager {
       const sessionContent = await fs.readFile(this.sessionFile, 'utf-8');
       const sessionData: SessionData = JSON.parse(sessionContent);
       
-      // Check if session is too old (older than 24 hours)
+      // Check if session is too old (older than 7 days for development)
       const sessionAge = Date.now() - sessionData.timestamp;
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+      const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
       
       if (sessionAge > maxAge) {
         logger.debug('Saved session is too old, ignoring');
-        await this.clearSession();
+        // Don't auto-clear old sessions during development to avoid rate limiting
+        // await this.clearSession();
         return false;
       }
       
@@ -166,8 +167,12 @@ export class SessionManager {
       });
       
       // If we're not on a login page and don't see login forms, assume we're logged in
+      // Also consider pages like sleeper selection as "logged in" states
       const isOnLoginPage = currentUrl.includes('login') || currentUrl.includes('auth') || pageInfo.hasLoginForm;
-      return !isOnLoginPage;
+      const isOnValidPage = currentUrl.includes('sleepiq.sleepnumber.com') && 
+                           (currentUrl.includes('pages/') || currentUrl.includes('dashboard') || currentUrl === 'https://sleepiq.sleepnumber.com/');
+      
+      return !isOnLoginPage && isOnValidPage;
       
     } catch (error) {
       logger.warn('Error checking login status:', error);

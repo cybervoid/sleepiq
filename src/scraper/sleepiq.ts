@@ -1069,10 +1069,30 @@ async function openBiosignalsDetails(page: Page): Promise<{
           if (match) return match[0];
         }
         
-        // HRV message patterns
+        // HRV message patterns - multiple variants
         if (allText.includes('HRV can be impacted')) {
           const match = allText.match(/HRV can be impacted by the quality of your sleep\. Your HRV is in the mid-range, so way to go\./i);
           if (match) return match[0];
+        }
+        
+        // Miki's HRV message pattern
+        if (allText.includes('relaxing activity may help to raise HRV')) {
+          const match = allText.match(/A relaxing activity may help to raise HRV, especially since stress can lower it\. Your HRV is in the mid-range\./i);
+          if (match) return match[0];
+        }
+        
+        // More general HRV message patterns
+        if (allText.includes('HRV') && allText.includes('mid-range')) {
+          const patterns = [
+            /A relaxing activity may help to raise HRV[^.]*\. Your HRV is in the mid-range\./i,
+            /Your HRV[^.]*mid-range[^.]*\./i,
+            /HRV[^.]*stress[^.]*mid-range[^.]*\./i
+          ];
+          
+          for (const pattern of patterns) {
+            const match = allText.match(pattern);
+            if (match) return match[0];
+          }
         }
         
         // Breath Rate message patterns
@@ -1086,38 +1106,119 @@ async function openBiosignalsDetails(page: Page): Promise<{
       });
     };
     
+    // Revert to the working approach and fix it properly
     // Extract Heart Rate message (should be default active tab)
     logger.debug('Extracting Heart Rate message...');
     const heartRateMessage = await extractCurrentTabMessage();
     results.heartRateMsg = heartRateMessage;
     logger.debug('Heart Rate message extracted:', heartRateMessage);
     
+    // Debug: Check what tabs are available on the biosignals page
+    const availableTabs = await page.evaluate(() => {
+      const allElements = Array.from(document.querySelectorAll('*'));
+      const potentialTabs = [];
+      
+      for (const el of allElements) {
+        const text = el.textContent?.trim();
+        const htmlEl = el as HTMLElement;
+        if (text && (text.includes('Heart') || text.includes('HRV') || text.includes('Breath') || text.includes('Rate') || text.includes('Variability')) &&
+            text.length < 50 && htmlEl.offsetWidth > 0 && htmlEl.offsetHeight > 0) {
+          potentialTabs.push({
+            text: text,
+            tagName: el.tagName,
+            className: htmlEl.className,
+            clickable: window.getComputedStyle(htmlEl).cursor === 'pointer' || el.tagName === 'GENERIC'
+          });
+        }
+      }
+      return potentialTabs;
+    });
+    logger.debug('Available tabs on biosignals page:', availableTabs);
+    
     // Click on Heart Rate Variability tab and extract message
     logger.debug('Clicking on Heart Rate Variability tab...');
     try {
       const hrvTabClicked = await page.evaluate(() => {
-        // Look for HRV tab using the exact text we saw in MCP
+        // Look for HRV tab with flexible matching
         const allElements = Array.from(document.querySelectorAll('*'));
-        const hrvTab = allElements.find(el => {
-          const text = el.textContent?.trim();
-          return text === 'Heart Rate Variability' && 
-                 (el.tagName === 'GENERIC' || el.classList.length > 0);
-        });
         
-        if (hrvTab) {
-          (hrvTab as HTMLElement).click();
-          console.log('Clicked HRV tab');
-          return true;
+        // Try different variations of HRV tab text
+        const hrvTexts = ['Heart Rate Variability', 'HRV'];
+        
+        for (const hrvText of hrvTexts) {
+          const hrvTab = allElements.find(el => {
+            const text = el.textContent?.trim();
+            const htmlEl = el as HTMLElement;
+            return text === hrvText && htmlEl.offsetWidth > 0 && htmlEl.offsetHeight > 0;
+          });
+          
+          if (hrvTab) {
+            console.log('Found HRV tab:', hrvText);
+            (hrvTab as HTMLElement).click();
+            return hrvText;
+          }
         }
+        
         console.log('HRV tab not found');
         return false;
       });
       
       if (hrvTabClicked) {
         await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Debug: Check what content is available after clicking HRV tab
+        const hrvPageContent = await page.evaluate(() => {
+          const allText = document.body.innerText;
+          const hrvRelatedText = [];
+          
+          // Look for any text containing HRV or variability
+          const lines = allText.split('\n');
+          for (const line of lines) {
+            if (line.toLowerCase().includes('hrv') || line.toLowerCase().includes('variability')) {
+              hrvRelatedText.push(line.trim());
+            }
+          }
+          
+          return {
+            hasHrvText: allText.toLowerCase().includes('hrv'),
+            hasVariabilityText: allText.toLowerCase().includes('variability'),
+            hrvRelatedLines: hrvRelatedText,
+            pageUrl: window.location.href
+          };
+        });
+        
+        logger.debug('HRV page content analysis:', hrvPageContent);
+        
         const hrvMessage = await extractCurrentTabMessage();
         results.heartRateVariabilityMsg = hrvMessage;
         logger.debug('HRV message extracted:', hrvMessage);
+        
+        // If no message found, try alternative extraction
+        if (!hrvMessage && hrvPageContent.hasHrvText) {
+          const alternativeHrv = await page.evaluate(() => {
+            const bodyText = document.body.innerText;
+            const patterns = [
+              /HRV can be impacted[^.!]*[.!]/i,
+              /Your HRV[^.!]*[.!]/i,
+              /heart rate variability[^.!]*[.!]/i,
+              /A relaxing activity may help to raise HRV[^.!]*[.!]/i,
+              /relaxing activity[^.!]*HRV[^.!]*mid-range[^.!]*[.!]/i
+            ];
+            
+            for (const pattern of patterns) {
+              const match = bodyText.match(pattern);
+              if (match) {
+                return match[0].trim();
+              }
+            }
+            return '';
+          });
+          
+          if (alternativeHrv) {
+            results.heartRateVariabilityMsg = alternativeHrv;
+            logger.debug('Alternative HRV extraction successful:', alternativeHrv);
+          }
+        }
       }
     } catch (error) {
       logger.debug('Could not extract HRV message:', error);
@@ -1130,8 +1231,8 @@ async function openBiosignalsDetails(page: Page): Promise<{
         const allElements = Array.from(document.querySelectorAll('*'));
         const breathTab = allElements.find(el => {
           const text = el.textContent?.trim();
-          return text === 'Breath Rate' && 
-                 (el.tagName === 'GENERIC' || el.classList.length > 0);
+          const htmlEl = el as HTMLElement;
+          return text === 'Breath Rate' && htmlEl.offsetWidth > 0 && htmlEl.offsetHeight > 0;
         });
         
         if (breathTab) {
