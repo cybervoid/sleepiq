@@ -3,12 +3,67 @@ import { logger } from '../shared/logger';
 import { DEFAULT_TIMEOUT, DEFAULT_USER_AGENT } from '../shared/constants';
 import { ScraperOptions } from '../shared/types';
 
-export async function launchBrowser(options: ScraperOptions = {}): Promise<Browser> {
+// Types for Cloudflare Workers Browser API
+interface CloudflareBrowser {
+  newPage(): Promise<Page>;
+}
+
+interface CloudflareEnv {
+  BROWSER?: CloudflareBrowser;
+}
+
+// Create a wrapper to make Cloudflare Browser API compatible with Puppeteer interface
+class CloudflareBrowserWrapper {
+  constructor(private cfBrowser: CloudflareBrowser) {}
+  
+  async newPage(): Promise<Page> {
+    return await this.cfBrowser.newPage();
+  }
+  
+  async close(): Promise<void> {
+    // Cloudflare Workers Browser API doesn't need explicit close
+    logger.debug('Browser close called - no action needed in Cloudflare Workers');
+    return Promise.resolve();
+  }
+  
+  // Add other Browser interface methods as needed
+  async pages(): Promise<Page[]> {
+    // Not available in Cloudflare Workers
+    return [];
+  }
+  
+  async targets() {
+    return [];
+  }
+  
+  isConnected(): boolean {
+    return true;
+  }
+  
+  async version(): Promise<string> {
+    return 'cloudflare-workers-browser';
+  }
+  
+  async userAgent(): Promise<string> {
+    return 'Chrome/WebKit Cloudflare Workers';
+  }
+}
+
+export async function launchBrowser(options: ScraperOptions = {}, env?: CloudflareEnv): Promise<Browser> {
   const { headless = process.env.HEADLESS !== 'false', debug = false } = options;
 
   logger.debug('Launching browser', { headless, debug });
 
+  // Check if we're in Cloudflare Workers environment
+  if (env?.BROWSER) {
+    logger.debug('Using Cloudflare Workers Browser API');
+    // Return the wrapped Cloudflare browser
+    const wrapper = new CloudflareBrowserWrapper(env.BROWSER);
+    return wrapper as unknown as Browser;
+  }
+
   // For local development, use full puppeteer
+  logger.debug('Using local Puppeteer');
   const browser = await puppeteer.launch({
     headless,
     args: [

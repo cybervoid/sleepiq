@@ -1,0 +1,121 @@
+#!/usr/bin/env node
+
+/**
+ * SleepIQ CLI - Simple portable script for SleepIQ data scraping
+ * 
+ * Usage:
+ *   sleepiq <username> <password>
+ *   sleepiq --help
+ * 
+ * Exit Codes:
+ *   0 - Success
+ *   1 - General error
+ *   2 - Authentication error
+ *   3 - Invalid arguments
+ */
+
+// Add support for loading TypeScript files at runtime
+require('tsx/cjs');
+
+// Import the main functionality
+const { scrapeSleepMetrics } = require('../src/scraper/sleepiq');
+
+async function main() {
+  try {
+    const args = process.argv.slice(2);
+    
+    // Check for help flag
+    if (args.includes('--help') || args.includes('-h')) {
+      console.error('Usage: sleepiq <username> <password>');
+      console.error('');
+      console.error('Extracts sleep metrics from SleepIQ dashboard and outputs JSON.');
+      console.error('');
+      console.error('Arguments:');
+      console.error('  username    Your SleepIQ email/username');
+      console.error('  password    Your SleepIQ password');
+      console.error('');
+      console.error('Output: JSON to stdout');
+      console.error('');
+      console.error('Exit codes:');
+      console.error('  0 - Success');
+      console.error('  1 - General error');
+      console.error('  2 - Authentication error');
+      console.error('  3 - Invalid arguments');
+      process.exit(0);
+    }
+    
+    // Get credentials from positional arguments
+    const username = args[0];
+    const password = args[1];
+    
+    if (!username || !password) {
+      console.error('Error: Missing credentials.');
+      console.error('Usage: sleepiq <username> <password>');
+      process.exit(3);
+    }
+    
+    const credentials = { username, password };
+    
+    const scraperOptions = {
+      headless: true,
+      timeout: 60000,
+      debug: false
+    };
+    
+    // Set log level to info (quiet)
+    process.env.LOG_LEVEL = 'info';
+    
+    // Redirect all logs to stderr so JSON output goes to stdout cleanly
+    const originalConsole = { ...console };
+    console.log = (...args) => originalConsole.error(...args);
+    console.info = (...args) => originalConsole.error(...args);
+    console.warn = (...args) => originalConsole.error(...args);
+    console.debug = (...args) => originalConsole.error(...args);
+    
+    // Run the scraper
+    const sleepData = await scrapeSleepMetrics(credentials, scraperOptions);
+    
+    // Format the output as expected by your next script
+    const output = {
+      rafa: {
+        "30-average": sleepData.rafa['30-average'],
+        "score": sleepData.rafa['score'], 
+        "all-time-best": sleepData.rafa['all-time-best'],
+        "message": sleepData.rafa['message'],
+        "heartRateMsg": sleepData.rafa['heartRateMsg'],
+        "heartRateVariabilityMsg": sleepData.rafa['heartRateVariabilityMsg'],
+        "breathRateMsg": sleepData.rafa['breathRateMsg']
+      },
+      miki: {
+        "30-average": sleepData.miki['30-average'],
+        "score": sleepData.miki['score'],
+        "all-time-best": sleepData.miki['all-time-best'], 
+        "message": sleepData.miki['message'],
+        "heartRateMsg": sleepData.miki['heartRateMsg'],
+        "heartRateVariabilityMsg": sleepData.miki['heartRateVariabilityMsg'],
+        "breathRateMsg": sleepData.miki['breathRateMsg']
+      }
+    };
+    
+    // Output JSON to stdout
+    originalConsole.log(JSON.stringify(output, null, 2));
+    
+    process.exit(0);
+    
+  } catch (error) {
+    // Determine exit code based on error type
+    let exitCode = 1;
+    
+    if (error.message.includes('Login failed') || error.message.includes('authentication') || error.message.includes('credentials')) {
+      exitCode = 2;
+    }
+    
+    console.error(`Error: ${error.message}`);
+    process.exit(exitCode);
+  }
+}
+
+main().catch(error => {
+  console.error(`Fatal error: ${error.message}`);
+  process.exit(1);
+});

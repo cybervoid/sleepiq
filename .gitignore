@@ -1,15 +1,18 @@
 node_modules/
 dist/
+package/
 coverage/
 .env
 .env.local
 *.log
 *.png
 *.jpg
+*.tar.gz
+checksums.txt
+install.sh
 .DS_Store
-cdk.out/
-.cdk.staging/
 build/
 
 # Session data
 .sessions/
+~/.config/sleepiq/

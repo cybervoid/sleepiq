@@ -1,24 +1,30 @@
 {
   "name": "sleepiq",
   "version": "1.0.0",
-  "description": "SleepIQ data scraper using Puppeteer and AWS Lambda",
-  "main": "dist/index.js",
+  "description": "SleepIQ data scraper - CLI application for extracting sleep metrics",
+  "main": "bin/sleepiq",
+  "bin": {
+    "sleepiq": "bin/sleepiq"
+  },
   "scripts": {
     "build": "tsc",
+    "start": "node bin/sleepiq",
     "dev": "tsx scripts/run-local.ts",
     "test-api": "tsx scripts/test-api.ts",
     "clear-session": "tsx scripts/clear-session.ts",
     "test": "echo \"No tests specified\" && exit 0",
-    "test-login": "npm run build && node test-login.js",
-    "test-sleepers": "npm run build && node test-sleepers.js",
-    "example-sleepers": "npm run build && node example-sleepers.js",
-    "scrape:sleepiq": "npm run build && node test-enhanced-scraper.js"
+    "test-cli": "node bin/sleepiq --help"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cybervoid/sleepiq.git"
   },
-  "keywords": ["sleepiq", "scraper", "puppeteer", "aws-lambda"],
+  "keywords": [
+    "sleepiq",
+    "scraper",
+    "puppeteer",
+    "cli"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -28,6 +34,7 @@
   "homepage": "https://github.com/cybervoid/sleepiq#readme",
   "dependencies": {
     "@types/node": "^24.8.1",
+    "commander": "^12.1.0",
     "dotenv": "^17.2.3",
     "puppeteer": "^24.25.0",
     "tsx": "^4.20.6",

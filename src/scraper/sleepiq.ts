@@ -16,14 +16,15 @@ import { SessionManager } from './session';
 
 export async function scrapeSleepMetrics(
   credentials: SleepIQCredentials,
-  options: ScraperOptions = {}
+  options: ScraperOptions = {},
+  env?: any
 ): Promise<SleepDataBySleeper> {
   let browser: Browser | null = null;
   let page: Page | null = null;
   const sessionManager = new SessionManager();
 
   try {
-    browser = await launchBrowser(options);
+    browser = await launchBrowser(options, env);
     page = await newPage(browser, options);
 
     // Try to restore existing session first

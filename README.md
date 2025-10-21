@@ -1,204 +1,197 @@
-# SleepIQ Data Scraper
+# SleepIQ CLI
 
-A TypeScript-based scraper for extracting sleep metrics from the SleepIQ dashboard using Puppeteer, designed for deployment on AWS Lambda.
+A simple portable script for extracting sleep metrics from the SleepIQ dashboard. Outputs JSON data that can be used as input for other scripts and automation workflows.
 
-## Quick Start - Local Testing
+## Installation
 
-### 1. Install Dependencies
+No installation needed! Just clone the repo and install dependencies:
+
 ```bash
+git clone <your-repo>
+cd sleepiq
 npm install
 ```
 
-### 2. Set Up Credentials
-Copy the example environment file and add your SleepIQ credentials:
+## Usage
+
 ```bash
-cp .env.example .env
+./sleepiq <username> <password>
 ```
 
-Edit `.env` and add your credentials:
-```env
-SLEEPIQ_USERNAME=your_email@example.com
-SLEEPIQ_PASSWORD=your_password
-LOG_LEVEL=debug
-HEADLESS=false
-```
+**Arguments:**
+- `username` - Your SleepIQ email/username
+- `password` - Your SleepIQ password
 
-### 3. Run the Scraper
+**Output:** JSON to stdout
 
-#### Single Sleeper Data (Original)
+### Examples
+
 ```bash
-npm run dev
+# Basic usage
+./sleepiq user@example.com mypassword
+
+# Save output to file
+./sleepiq user@example.com mypassword > sleep_data.json
+
+# Use in a pipeline
+./sleepiq user@example.com mypassword | jq '.rafa.score'
+
+# Get help
+./sleepiq --help
 ```
 
-#### Multiple Sleepers Data (New)
+### Alternative: Direct Node Execution
+
 ```bash
-npm run example-sleepers
+# If you prefer to run without the wrapper script
+node bin/sleepiq user@example.com mypassword
 ```
 
-This will:
-- Launch a visible Chrome browser (HEADLESS=false)
-- Log in to your SleepIQ account
-- Navigate to the dashboard
-- Extract sleep data for both "rafa" and "miki" sleepers
-- Output the results as JSON with separate keys for each sleeper
-- Take debug screenshots if enabled
+## Output Format
 
-#### Test Scripts
-```bash
-# Test basic login functionality
-npm run test-login
+The CLI outputs JSON to stdout with the following structure:
 
-# Test sleeper data extraction
-npm run test-sleepers
-```
-
-## Data Structure
-
-### Single Sleeper (Original)
-```typescript
-interface SleepMetrics {
-  date: string;
-  sleepScore?: number;
-  durationMinutes?: number;
-  timeInBedMinutes?: number;
-  restfulMinutes?: number;
-  restlessMinutes?: number;
-  awakeMinutes?: number;
-  heartRateAvg?: number;
-  respirationRateAvg?: number;
-  outOfBedCount?: number;
-  raw?: any;
+```json
+{
+  "rafa": {
+    "30-average": "69",
+    "score": "73",
+    "all-time-best": "88",
+    "message": "You were more restless than normal. Is there a change you can make to your sleep routine to get back on track?",
+    "heartRateMsg": "A lower heart rate generally means your heart is working more efficiently. That's great news!",
+    "heartRateVariabilityMsg": "HRV can be impacted by the quality of your sleep. Your HRV is in the mid-range, so way to go.",
+    "breathRateMsg": "Your SleepIQ® score was positively affected because your breath rate was within your average range. Sometimes, average is good!"
+  },
+  "miki": {
+    "30-average": "69",
+    "score": "73",
+    "all-time-best": "88",
+    "message": "You were more restless last night. If you're tossing and turning more, it might be a sign you're getting less efficient sleep.",
+    "heartRateMsg": "A lower heart rate generally means your heart is working more efficiently. That's great news!",
+    "heartRateVariabilityMsg": "HRV can be impacted by the quality of your sleep. Your HRV is in the mid-range, so way to go.",
+    "breathRateMsg": "Your SleepIQ® score was positively affected because your breath rate was within your average range. Sometimes, average is good!"
+  }
 }
 ```
 
-### Multiple Sleepers (New)
-```typescript
-interface SleepDataBySleeper {
-  rafa: SleepMetrics;
-  miki: SleepMetrics;
-}
-```
+### Field Descriptions
 
-The new `scrapeSleepDataBySleeper` function returns a JSON object with two keys:
-- `rafa`: Sleep metrics for the first sleeper
-- `miki`: Sleep metrics for the second sleeper
+- `30-average`: 30-day average SleepIQ score
+- `score`: Current night's SleepIQ score
+- `all-time-best`: All-time best SleepIQ score
+- `message`: General sleep feedback message
+- `heartRateMsg`: Heart rate analysis message
+- `heartRateVariabilityMsg`: Heart rate variability (HRV) analysis message
+- `breathRateMsg`: Breath rate analysis message
 
-Each sleeper's data follows the same `SleepMetrics` structure as the original single-sleeper function.
+## How It Works
 
-## Configuration Options
+1. Launches a headless Chrome browser using Puppeteer
+2. Logs into your SleepIQ account
+3. Navigates to the dashboard
+4. Extracts sleep metrics for both sleepers ("rafa" and "miki")
+5. Outputs clean JSON to stdout
+6. Logs any errors to stderr
 
-### Environment Variables
-- `SLEEPIQ_USERNAME` - Your SleepIQ login email
-- `SLEEPIQ_PASSWORD` - Your SleepIQ password
-- `LOG_LEVEL` - Logging level: `debug`, `info`, `warn`, `error`
-- `HEADLESS` - Set to `false` to see browser during development
-- `TIMEOUT` - Request timeout in milliseconds (default: 30000)
+### Session Persistence
 
-### Logging Controls (Optional)
-For cleaner output, you can control specific logging areas:
-- `VERBOSE_REQUESTS=true` - Show all network requests (can be very verbose)
-- `VERBOSE_LOGIN=true` - Show detailed login form interactions
-- `VERBOSE_EXTRACTION=true` - Show detailed data extraction debug info
-- `VERBOSE_NAVIGATION=true` - Show detailed page navigation steps
-
-### Output Format Controls
-- **Default**: Raw JSON output (same as API response)
-- `SHOW_SUMMARY=true` - Show pretty summary instead of raw JSON  
-- `SHOW_DEBUG_DATA=true` - Include full debug data with raw extraction info
-
-## Debugging
-
-### Visual Debugging
-Set `HEADLESS=false` in your `.env` file to watch the browser navigate through the SleepIQ site.
-
-### Debug Logging
-Set `LOG_LEVEL=debug` to see detailed logs including:
-- Navigation steps
-- Element selections
-- Network requests
-- Screenshot notifications
-
-### Screenshots
-When debug mode is enabled, the scraper will automatically capture screenshots:
-- `login-failed.png` - If login fails
-- `dashboard.png` - After successful login
-- `error.png` - If any error occurs
-
-## Project Structure
-
-```
-src/
-  shared/
-    types.ts       - TypeScript interfaces
-    constants.ts   - URLs and configuration
-    logger.ts      - Logging utility
-  scraper/
-    browser.ts     - Puppeteer browser management
-    sleepiq.ts     - Main scraping logic
-scripts/
-  run-local.ts     - Local development runner
-```
+The script automatically saves your browser session to `~/.config/sleepiq/session.json` to avoid repeated logins. This session is reused on subsequent runs until it expires.
 
 ## Troubleshooting
 
-### Login Issues
-- Verify your credentials in `.env`
+### Login Fails
+- Verify your credentials are correct
 - Check if SleepIQ requires 2FA (not currently supported)
-- Set `HEADLESS=false` to visually debug the login process
+- Session file may be corrupted - delete `~/.config/sleepiq/session.json`
+
+### Timeout Errors  
+- Your internet connection may be slow
+- SleepIQ servers may be experiencing issues
+- The script has a 60-second timeout by default
 
 ### Element Not Found
-- The SleepIQ dashboard may have changed
-- Check debug screenshots to see current page structure
-- Update selectors in `src/scraper/sleepiq.ts`
+- The SleepIQ dashboard layout may have changed
+- File an issue if the script stops working
 
-### Timeout Errors
-- Increase `TIMEOUT` value in `.env`
-- Check your internet connection
-- SleepIQ servers may be slow or down
+## Integration with Other Scripts
 
-## API Deployment
+The CLI outputs clean JSON to stdout, making it easy to integrate with other scripts:
 
-This scraper is ready for deployment as an API endpoint that returns JSON responses.
-
-### Test API Response Format
+### Bash
 ```bash
-# Test the JSON API response locally
-yarn test-api
+#!/bin/bash
+USERNAME="user@example.com"
+PASSWORD="mypassword"
+
+# Get sleep data and process it
+SLEEP_DATA=$(./sleepiq "$USERNAME" "$PASSWORD")
+echo "Sleep data retrieved!"
+
+# Save to file with timestamp
+echo "$SLEEP_DATA" > "sleep_data_$(date +%Y%m%d).json"
+
+# Extract specific values using jq
+RAFA_SCORE=$(echo "$SLEEP_DATA" | jq -r '.rafa.score')
+echo "Rafa's score: $RAFA_SCORE"
 ```
 
-### Deploy to Cloud Platforms
+### Python
+```python
+import subprocess
+import json
+import sys
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions on deploying to:
-- **AWS Lambda** (recommended for cost and performance)
-- **Cloudflare Workers** (great free tier)
-- **Vercel** (easy deployment)
-- **Railway** (simple hosting)
-- **Heroku** (traditional PaaS)
+username = "user@example.com"
+password = "mypassword"
 
-### API Response Format
+# Run sleepiq CLI and get JSON output
+result = subprocess.run(
+    ['./sleepiq', username, password],
+    capture_output=True,
+    text=True
+)
 
-The API returns standardized JSON with this structure:
-```json
-{
-  "success": true,
-  "data": {
-    "rafa": {
-      "30-average": "69",
-      "score": "73",
-      "all-time-best": "88",
-      "message": "Sleep message text...",
-      "heartRateMsg": "Heart rate message...",
-      "heartRateVariabilityMsg": "HRV message...",
-      "breathRateMsg": "Breath rate message..."
-    },
-    "miki": { /* same structure */ }
-  },
-  "timestamp": "2025-10-20T19:25:10.215Z"
+if result.returncode == 0:
+    sleep_data = json.loads(result.stdout)
+    print(f"Rafa's score: {sleep_data['rafa']['score']}")
+    print(f"Miki's score: {sleep_data['miki']['score']}")
+else:
+    print(f"Error: {result.stderr}", file=sys.stderr)
+    sys.exit(result.returncode)
+```
+
+### Node.js
+```javascript
+const { execSync } = require('child_process');
+
+const username = 'user@example.com';
+const password = 'mypassword';
+
+try {
+  const output = execSync(
+    `./sleepiq "${username}" "${password}"`,
+    { encoding: 'utf8' }
+  );
+  const sleepData = JSON.parse(output);
+  console.log('Sleep scores:', {
+    rafa: sleepData.rafa.score,
+    miki: sleepData.miki.score
+  });
+} catch (error) {
+  console.error('Failed to get sleep data:', error.message);
+  process.exit(1);
 }
 ```
 
+## Exit Codes
+
+- `0` - Success
+- `1` - General error (network, parsing, etc.)
+- `2` - Authentication error (invalid credentials)
+- `3` - Invalid arguments
+
 ## Security Notes
 
-- Never commit real credentials to git
-- The `.env` file is gitignored for safety
-- Use AWS Secrets Manager in production environments
+- Never commit credentials to git
+- Session data is stored in `~/.config/sleepiq/` with restrictive permissions
+- Be careful when passing credentials as command-line arguments (visible in process list)
