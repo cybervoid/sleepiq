@@ -1,0 +1,21 @@
+{
+  "metrics": {
+    "30-average": "66",
+    "score": "77", 
+    "all-time-best": "92",
+    "message": "Nice job! You had fewer bed exits than your average, which may help you achieve your sleep goal more often.",
+    "heartRateMsg": "A lower heart rate generally means your heart is working more efficiently. That's great news!",
+    "heartRateVariabilityMsg": "Way to go, your HRV is in the high range! High HRV may indicate better overall performance of your heart and nervous system.",
+    "breathRateMsg": "Don't take it for granted! A breath rate around your average is good for your SleepIQ® score."
+  },
+  "raw_data": {
+    "date": "Mon Oct 20 - Tue Oct 21",
+    "heart_rate_current": "52",
+    "heart_rate_average": "61",
+    "hrv_current": "142", 
+    "hrv_average": "104",
+    "breath_rate_current": "15",
+    "breath_rate_average": "14"
+  },
+  "extraction_timestamp": "2025-10-21T17:46:33Z"
+}

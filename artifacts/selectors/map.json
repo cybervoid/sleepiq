@@ -1,0 +1,70 @@
+{
+  "dashboard_metrics": {
+    "30_day_average": {
+      "primary_selector": "generic:contains('30-day avg') + generic",
+      "container_context": "metrics section",
+      "fallback_patterns": ["30-day avg\\n+(\\d+)", "30-day\\s+avg[\\s\\n]+(\\d+)"]
+    },
+    "sleep_score": {
+      "primary_selector": "SleepIQ® score container generic",
+      "container_context": "main metrics area", 
+      "fallback_patterns": ["SleepIQ[®]?\\s*score[\\s\\n]+(\\d+)", "score[\\s\\n]+(\\d{2})"]
+    },
+    "all_time_best": {
+      "primary_selector": "generic:contains('All-time best') + generic",
+      "container_context": "metrics section",
+      "fallback_patterns": ["All-time best\\n+(\\d+)", "All-time\\s+best[\\s\\n]+(\\d+)"]
+    }
+  },
+  "sleep_session_message": {
+    "navigation": {
+      "url_path": "#/pages/sleep/details/sleep-session",
+      "click_target": "Sleep Session View Details button"
+    },
+    "extraction": {
+      "primary_selector": "main message text between metrics and details sections",
+      "container_scope": "sleep session details page content area",
+      "text_patterns": [
+        "message appears after metrics, before sleep timeline chart",
+        "typically 1-2 sentences ending with period or exclamation"
+      ]
+    }
+  },
+  "biosignals_messages": {
+    "navigation": {
+      "url_path": "#/pages/sleep/details/biosignals",
+      "click_target": "Biosignals View Details button"
+    },
+    "tabs": {
+      "heart_rate": {
+        "tab_selector": "generic:contains('Heart Rate'):not(:contains('Variability'))",
+        "active_by_default": true,
+        "message_selector": "main content area first paragraph",
+        "expected_pattern": "A lower heart rate generally means"
+      },
+      "heart_rate_variability": {
+        "tab_selector": "generic:contains('Heart Rate Variability')",
+        "message_selector": "main content area first paragraph after tab click",
+        "expected_patterns": [
+          "Your heart rate variability was in the high range",
+          "Way to go, your HRV is in the high range"
+        ]
+      },
+      "breath_rate": {
+        "tab_selector": "generic:contains('Breath Rate'):not(:contains('Heart Rate'))",
+        "message_selector": "main content area first paragraph after tab click", 
+        "expected_pattern": "Don't take it for granted! A breath rate around"
+      }
+    },
+    "extraction_strategy": {
+      "container_scoped": "Extract from active tab content area only, not from tab headers",
+      "wait_after_click": 1500,
+      "text_cleanup": "Remove tab header text contamination, normalize whitespace"
+    }
+  },
+  "common_issues": {
+    "text_contamination": "Tab headers being included in message extraction",
+    "missing_breath_rate": "Breath Rate tab not being clicked or message not found",
+    "wrong_sleep_message": "Extracting from dashboard instead of Sleep Session details page"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "rafa": {
+    "30-average": "70",
+    "score": "80",
+    "all-time-best": "88",
+    "message": "Staying in bed sounds easy, but we all have nights where we have to get up. Nice job reducing your bed exits.",
+    "heartRateMsg": "A lower heart rate generally means your heart is working more efficiently. That's great news!",
+    "heartRateVariabilityMsg": "Heart Rate Variability Breath Rate Your heart rate variability was in the high range.",
+    "breathRateMsg": ""
+  },
+  "miki": {
+    "30-average": "66",
+    "score": "77",
+    "all-time-best": "92",
+    "message": "You were not as restless, which helped your SleepIQ® score. Nice!",
+    "heartRateMsg": "A lower heart rate generally means your heart is working more efficiently. That's great news!",
+    "heartRateVariabilityMsg": "your HRV is in the high range!",
+    "breathRateMsg": ""
+  }
+}

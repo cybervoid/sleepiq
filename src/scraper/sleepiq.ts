@@ -13,6 +13,10 @@ import {
   waitForModalDismissed 
 } from './helpers';
 import { SessionManager } from './session';
+import { 
+  extractBiosignalsMessagesImproved, 
+  extractSleepSessionMessageImproved 
+} from './improved-biosignals';
 
 export async function scrapeSleepMetrics(
   credentials: SleepIQCredentials,
@@ -1327,16 +1331,16 @@ async function extractSleepDataOrchestrated(page: Page): Promise<SleepMetrics> {
       'all-time-best': sleepMetrics['all-time-best']
     });
     
-    // Step 2: Extract the general sleep message
+    // Step 2: Extract the general sleep message using improved method
     logger.debug('Step 2: Extracting sleep session message...');
-    const sleepMessage = await openSleepSessionDetails(page);
+    const sleepMessage = await extractSleepSessionMessageImproved(page);
     sleepMetrics['message'] = sleepMessage;
     
     logger.debug('Sleep message extracted:', sleepMessage);
     
-    // Step 3: Extract biosignals messages (heart rate, HRV, breathing rate)
+    // Step 3: Extract biosignals messages using improved method
     logger.debug('Step 3: Extracting biosignals messages...');
-    const biosignalsData = await openBiosignalsDetails(page);
+    const biosignalsData = await extractBiosignalsMessagesImproved(page);
     
     sleepMetrics['heartRateMsg'] = biosignalsData.heartRateMsg;
     sleepMetrics['heartRateVariabilityMsg'] = biosignalsData.heartRateVariabilityMsg;

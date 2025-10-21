@@ -1,0 +1,20 @@
+{
+  "rafa": {
+    "30-average": "70",
+    "score": "80",
+    "all-time-best": "88",
+    "message": "Staying in bed sounds easy, but we all have nights where we have to get up. Nice job reducing your bed exits.",
+    "heartRateMsg": "lower heart rate generally means yo r heart is working more efficiently.  hat's great news!",
+    "heartRateVariabilityMsg": "o r heart rate variability was in the high range.  his is generally good, and helps yo  feel energized, good work!",
+    "breathRateMsg": "on't take it for granted!   breath rate aro nd yo r average is good for yo r  leep  ® score."
+  },
+  "miki": {
+    "30-average": "66",
+    "score": "77",
+    "all-time-best": "92",
+    "message": "",
+    "heartRateMsg": "lower heart rate generally means yo r heart is working more efficiently.  hat's great news!",
+    "heartRateVariabilityMsg": "ay to go, yo r     is in the high range!  igh     may indicate better overall performance of yo r heart and nervo s system.",
+    "breathRateMsg": "on't take it for granted!   breath rate aro nd yo r average is good for yo r  leep  ® score."
+  }
+}

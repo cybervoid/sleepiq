@@ -1,0 +1,21 @@
+{
+  "metrics": {
+    "30-average": "70",
+    "score": "80", 
+    "all-time-best": "88",
+    "message": "Your restless sleep was around your average. A wind down routine may help to lower your restless sleep overall. Try it tonight!",
+    "heartRateMsg": "A lower heart rate generally means your heart is working more efficiently. That's great news!",
+    "heartRateVariabilityMsg": "Your heart rate variability was in the high range. This is generally good, and helps you feel energized, good work!",
+    "breathRateMsg": "Don't take it for granted! A breath rate around your average is good for your SleepIQ® score."
+  },
+  "raw_data": {
+    "date": "Mon Oct 20 - Tue Oct 21",
+    "heart_rate_current": "55",
+    "heart_rate_average": "60",
+    "hrv_current": "115", 
+    "hrv_average": "104",
+    "breath_rate_current": "13",
+    "breath_rate_average": "14"
+  },
+  "extraction_timestamp": "2025-10-21T17:46:33Z"
+}
