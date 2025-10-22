@@ -27,18 +27,34 @@ npm install
 ### Examples
 
 ```bash
-# Basic usage
+# Basic usage - outputs JSON to stdout
 ./sleepiq user@example.com mypassword
+
+# Hide info messages (only show JSON)
+./sleepiq user@example.com mypassword 2>/dev/null
 
 # Save output to file
 ./sleepiq user@example.com mypassword > sleep_data.json
 
-# Use in a pipeline
+# Use in a pipeline with jq
 ./sleepiq user@example.com mypassword | jq '.rafa.score'
+
+# Capture JSON in a variable (bash)
+json_output=$(./sleepiq user@example.com mypassword)
 
 # Get help
 ./sleepiq --help
 ```
+
+### Output Control
+
+The script outputs **JSON to stdout** and **info/debug messages to stderr**. This means:
+
+- JSON output can be piped to other commands without interference
+- Info messages (`[INFO]`, `[DEBUG]`, etc.) don't pollute your JSON output
+- To hide info messages completely: redirect stderr to `/dev/null` using `2>/dev/null`
+- To save only JSON: `./sleepiq user pass > data.json`
+- To save everything including logs: `./sleepiq user pass > data.json 2>&1`
 
 ### Alternative: Direct Node Execution
 
@@ -190,8 +206,190 @@ try {
 - `2` - Authentication error (invalid credentials)
 - `3` - Invalid arguments
 
+## Deployment to Server
+
+To deploy this script to a server (production environment):
+
+### Files to Copy
+
+You need to copy these files/directories:
+
+```bash
+# Required files
+bin/
+src/
+node_modules/
+package.json
+package-lock.json
+sleepiq (wrapper script)
+
+# Optional but recommended
+.sessions/  # If you want to preserve existing sessions
+```
+
+### Quick Deployment Steps
+
+**Option 1: Copy entire directory**
+```bash
+# On your local machine
+tar -czf sleepiq.tar.gz \
+  bin/ src/ node_modules/ package.json package-lock.json sleepiq
+
+# Copy to server
+scp sleepiq.tar.gz user@server:/path/to/destination/
+
+# On server
+cd /path/to/destination/
+tar -xzf sleepiq.tar.gz
+chmod +x sleepiq
+```
+
+**Option 2: Fresh install on server**
+```bash
+# On server
+git clone <your-repo> sleepiq
+cd sleepiq
+npm install --production
+chmod +x sleepiq
+```
+
+**Option 3: Minimal deployment (without node_modules)**
+```bash
+# Copy only source files
+rsync -av --exclude='node_modules' \
+  bin/ src/ package.json package-lock.json sleepiq \
+  user@server:/path/to/destination/
+
+# On server, install dependencies
+cd /path/to/destination
+npm install --production
+chmod +x sleepiq
+```
+
+### Server Requirements
+
+- **Node.js**: v16 or higher
+- **npm**: v7 or higher  
+- **System dependencies**: Puppeteer requires Chrome/Chromium
+  - Ubuntu/Debian: `sudo apt-get install -y chromium-browser`
+  - CentOS/RHEL: `sudo yum install -y chromium`
+  - Alpine: `apk add chromium`
+
+### Automated Deployment Script
+
+```bash
+#!/bin/bash
+# deploy.sh - Deploy sleepiq to remote server
+
+SERVER="user@your-server.com"
+DEST_PATH="/opt/sleepiq"
+
+echo "Building deployment package..."
+tar -czf sleepiq-deploy.tar.gz \
+  bin/ src/ package.json package-lock.json sleepiq
+
+echo "Copying to server..."
+scp sleepiq-deploy.tar.gz $SERVER:/tmp/
+
+echo "Installing on server..."
+ssh $SERVER << 'EOF'
+  sudo mkdir -p /opt/sleepiq
+  cd /opt/sleepiq
+  sudo tar -xzf /tmp/sleepiq-deploy.tar.gz
+  sudo npm install --production
+  sudo chmod +x sleepiq
+  rm /tmp/sleepiq-deploy.tar.gz
+  echo "Deployment complete!"
+EOF
+
+rm sleepiq-deploy.tar.gz
+echo "Done!"
+```
+
+### Running on Server
+
+```bash
+# Test the deployment
+./sleepiq --help
+
+# Run once
+./sleepiq user@example.com password > /var/log/sleep_data.json
+
+# Schedule with cron (daily at 11 AM)
+echo "0 11 * * * cd /opt/sleepiq && ./sleepiq user@example.com password > /var/log/sleep_$(date +\%Y\%m\%d).json 2>&1" | crontab -
+```
+
+## Docker Usage
+
+You can run the SleepIQ CLI in a Docker container for better portability and isolation.
+
+### Build the Docker Image
+
+```bash
+docker build -t sleepiq .
+```
+
+### Run Without Persistence (Stateless)
+
+Runs the container without preserving login sessions. You'll need to login each time:
+
+```bash
+docker run --rm sleepiq USERNAME PASSWORD
+```
+
+### Run With Session Persistence (Recommended for Development)
+
+Mounts the `.sessions/` directory to persist login sessions between runs:
+
+```bash
+docker run --rm -v "$(pwd)/.sessions:/app/.sessions" sleepiq USERNAME PASSWORD
+```
+
+### Using the Helper Script
+
+A helper script is provided for easier usage:
+
+```bash
+# Without persistence
+./docker-run.sh user@example.com mypassword
+
+# With persistence (recommended for development)
+./docker-run.sh --persist user@example.com mypassword
+
+# Pipe JSON output to jq
+./docker-run.sh --persist user@example.com mypassword | jq '.rafa.score'
+```
+
+### Docker Examples
+
+```bash
+# Save JSON to a file
+docker run --rm sleepiq USERNAME PASSWORD > data.json
+
+# Hide info messages (only show JSON)
+docker run --rm sleepiq USERNAME PASSWORD 2>/dev/null
+
+# Pipe to jq for filtering
+docker run --rm sleepiq USERNAME PASSWORD | jq '.rafa.score'
+
+# Use in a script
+SLEEP_DATA=$(docker run --rm sleepiq USERNAME PASSWORD)
+echo "$SLEEP_DATA" | jq '.'
+```
+
+### Docker Notes
+
+- **Exit codes** (0, 1, 2, 3) are preserved by the container
+- **JSON output** goes to stdout, **logs** go to stderr (same as native CLI)
+- By default, the container is **stateless** (no session persistence)
+- Mount `$(pwd)/.sessions:/app/.sessions` to persist login sessions between runs
+- The container runs as a non-root user for better security
+- System Chromium is used to keep the image size smaller
+
 ## Security Notes
 
 - Never commit credentials to git
-- Session data is stored in `~/.config/sleepiq/` with restrictive permissions
+- Session data is stored in `.sessions/` with restrictive permissions
 - Be careful when passing credentials as command-line arguments (visible in process list)
+- Consider using environment variables or a secrets manager for credentials
+- On servers, restrict file permissions: `chmod 600 sleepiq .sessions/*`

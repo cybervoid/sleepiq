@@ -276,6 +276,20 @@ async function performLogin(
   // Wait for any validation or dynamic updates and form to be ready
   await new Promise(resolve => setTimeout(resolve, 2000));
   
+  // Wait for login button to be enabled (form validation may take time)
+  try {
+    await page.waitForFunction(() => {
+      const button = Array.from(document.querySelectorAll('button')).find(btn => {
+        const text = btn.textContent?.trim().toLowerCase();
+        return text === 'login' && !btn.disabled;
+      });
+      return button !== undefined;
+    }, { timeout: 5000 });
+    logger.debug('Login button is now enabled');
+  } catch (error) {
+    logger.debug('Timeout waiting for login button to enable, proceeding anyway');
+  }
+  
   // Debug: Check what elements are available for clicking
   const pageInfo = await page.evaluate(() => {
     const buttons = Array.from(document.querySelectorAll('button')).map(btn => ({
@@ -313,11 +327,11 @@ async function performLogin(
   // Try to find and click the login button
   let buttonClicked = false;
   
-  // Strategy 1: Look for button with "login" text
+  // Strategy 1: Look for button with "login" text and click via page.evaluate
   try {
-    const loginButton = await page.evaluateHandle(() => {
+    const clickResult = await page.evaluate(() => {
       const allElements = Array.from(document.querySelectorAll('*'));
-      return allElements.find(el => {
+      const loginButton = allElements.find(el => {
         const text = el.textContent?.trim().toLowerCase();
         const htmlEl = el as HTMLElement;
         return text === 'login' && 
@@ -328,29 +342,45 @@ async function performLogin(
                 (htmlEl as any).onclick ||
                 window.getComputedStyle(el).cursor === 'pointer');
       });
-    });
-    
-    if (loginButton && loginButton.asElement()) {
-      logger.debug('Found login button, attempting to click...');
-      await (loginButton.asElement() as any)!.click();
       
-      // Also try triggering form submission events
-      await page.evaluate(() => {
+      if (loginButton) {
+        const htmlButton = loginButton as HTMLButtonElement;
+        const buttonInfo = {
+          tag: htmlButton.tagName,
+          disabled: htmlButton.disabled,
+          type: htmlButton.getAttribute('type'),
+          text: htmlButton.textContent?.trim()
+        };
+        
+        // Click the button multiple times with different events
+        htmlButton.focus();
+        htmlButton.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        htmlButton.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        htmlButton.click();
+        htmlButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        
+        // Also trigger form submission
         const form = document.querySelector('form');
         if (form) {
-          // Dispatch submit event
           form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         }
-      });
-      
+        
+        return buttonInfo;
+      }
+      return null;
+    });
+    
+    if (clickResult) {
       buttonClicked = true;
-      logger.debug('Login button clicked and form events triggered');
+      logger.debug('Login button clicked successfully:', JSON.stringify(clickResult));
+    } else {
+      logger.debug('No login button found in Strategy 1');
     }
   } catch (error) {
     logger.debug('Login button click failed:', error);
   }
   
-  // Strategy 2: Try common button selectors
+  // Strategy 2: Try common button selectors and click via evaluate
   if (!buttonClicked) {
     const buttonSelectors = [
       'button[type="submit"]',
@@ -363,10 +393,17 @@ async function performLogin(
     
     for (const selector of buttonSelectors) {
       try {
-        const button = await page.$(selector);
-        if (button) {
-          logger.debug(`Found button with selector: ${selector}`);
-          await button.click();
+        const clicked = await page.evaluate((sel) => {
+          const button = document.querySelector(sel);
+          if (button) {
+            (button as HTMLElement).click();
+            return true;
+          }
+          return false;
+        }, selector);
+        
+        if (clicked) {
+          logger.debug(`Successfully clicked button with selector: ${selector}`);
           buttonClicked = true;
           break;
         }
@@ -465,13 +502,13 @@ async function performLogin(
   const currentUrl = page.url();
   const currentPath = loginPageInfo.currentPath;
   
-  // More specific check: we're still on login if we have BOTH a login form AND are on initial login page
-  // Allow for intermediate auth pages like /#/auth/login which might be part of successful flow
+  // More specific check: we're still on login if we have BOTH a login form AND are on any login page
+  // This includes /#/login, /#/auth/login, or any other login variant
   const isStillOnLogin = loginPageInfo.hasLoginForm && 
-                        (currentPath.includes('#/login') || currentPath === '/#/login');
+                        (currentPath.includes('/login') || currentPath.includes('auth'));
   
-  // However, if we're on /#/auth/login, let's wait longer for potential redirect
-  if (currentPath.includes('auth/login') && !isStillOnLogin) {
+  // If we're on any auth/login page, wait for potential redirect
+  if (currentPath.includes('auth/login') && loginPageInfo.hasLoginForm) {
     logger.debug('Detected auth page, waiting for potential redirect...');
     
     // Wait for up to 10 seconds for redirect, checking every 2 seconds
