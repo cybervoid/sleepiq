@@ -1,0 +1,17 @@
+# Region to deploy into (must match any region-specific ARNs like layers)
+aws_region = "us-east-1"
+
+# Name for the Lambda function
+lambda_function_name = "sleepiq-scraper"
+
+# Globally-unique S3 bucket name for session storage
+s3_bucket_name = "sleepiq-sessions-YOUR-UNIQUE-NAME-HERE"
+
+# Optional: override the Chrome layer ARN (ensure it matches region/arch)
+# chrome_layer_arn = "arn:aws:lambda:us-east-1:764866452798:layer:chrome-aws-lambda:latest"
+
+# These sensitive values will be provided via environment variables (see scripts/deploy.sh)
+# sleepiq_username = "will-be-provided-via-TF_VAR_sleepiq_username"
+# sleepiq_password = "will-be-provided-via-TF_VAR_sleepiq_password"
+# api_username     = "will-be-provided-via-TF_VAR_api_username"
+# api_password     = "will-be-provided-via-TF_VAR_api_password"

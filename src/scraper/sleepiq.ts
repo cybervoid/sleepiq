@@ -232,12 +232,17 @@ async function performLogin(
     }
   }, emailSelector);
   
-  await page.click(emailSelector);
+  // More human-like interaction with random delays
+  await page.click(emailSelector, { delay: Math.random() * 100 + 50 });
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
   await page.keyboard.down('Control');
   await page.keyboard.press('KeyA');
   await page.keyboard.up('Control');
   await page.keyboard.press('Delete');
-  await page.type(emailSelector, credentials.username, { delay: 50 });
+  // Type with variable delays to mimic human typing
+  for (const char of credentials.username) {
+    await page.keyboard.type(char, { delay: 50 + Math.random() * 100 });
+  }
   
   // Clear and type password with enhanced clearing
   await page.evaluate((selector) => {
@@ -248,12 +253,16 @@ async function performLogin(
     }
   }, passwordSelector);
   
-  await page.click(passwordSelector);
+  await page.click(passwordSelector, { delay: Math.random() * 100 + 50 });
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
   await page.keyboard.down('Control');
   await page.keyboard.press('KeyA');
   await page.keyboard.up('Control');
   await page.keyboard.press('Delete');
-  await page.type(passwordSelector, credentials.password, { delay: 50 });
+  // Type password with variable delays
+  for (const char of credentials.password) {
+    await page.keyboard.type(char, { delay: 50 + Math.random() * 100 });
+  }
   
   // Trigger input events to ensure the SPA recognizes the changes
   await page.evaluate((emailSel, passSel) => {
@@ -274,7 +283,8 @@ async function performLogin(
   }, emailSelector, passwordSelector);
   
   // Wait for any validation or dynamic updates and form to be ready
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  // In Lambda/headless, SPAs often need extra time
+  await new Promise(resolve => setTimeout(resolve, 3000));
   
   // Wait for login button to be enabled (form validation may take time)
   try {
@@ -327,43 +337,55 @@ async function performLogin(
   // Try to find and click the login button
   let buttonClicked = false;
   
-  // Strategy 1: Look for button with "login" text and click via page.evaluate
+  // Strategy 1: Target the Angular button component specifically
   try {
     const clickResult = await page.evaluate(() => {
-      const allElements = Array.from(document.querySelectorAll('*'));
-      const loginButton = allElements.find(el => {
-        const text = el.textContent?.trim().toLowerCase();
-        const htmlEl = el as HTMLElement;
-        return text === 'login' && 
-               htmlEl.offsetWidth > 0 && 
-               htmlEl.offsetHeight > 0 &&
-               (el.tagName === 'BUTTON' || 
-                el.getAttribute('role') === 'button' ||
-                (htmlEl as any).onclick ||
-                window.getComputedStyle(el).cursor === 'pointer');
-      });
+      // Try to find the Angular button component
+      const appButton = document.querySelector('app-siq-button');
+      const primaryBtn = document.querySelector('.primary-btn[role="button"]');
+      const targetButton = primaryBtn || appButton;
       
-      if (loginButton) {
-        const htmlButton = loginButton as HTMLButtonElement;
+      if (targetButton) {
+        const htmlButton = targetButton as HTMLElement;
         const buttonInfo = {
           tag: htmlButton.tagName,
-          disabled: htmlButton.disabled,
-          type: htmlButton.getAttribute('type'),
+          className: htmlButton.className,
           text: htmlButton.textContent?.trim()
         };
         
-        // Click the button multiple times with different events
+        // Trigger multiple events to ensure Angular picks it up
         htmlButton.focus();
-        htmlButton.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-        htmlButton.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-        htmlButton.click();
-        htmlButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         
-        // Also trigger form submission
-        const form = document.querySelector('form');
-        if (form) {
-          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        }
+        // Create and dispatch mouse events with full detail
+        const mouseDownEvent = new MouseEvent('mousedown', {
+          view: window,
+          bubbles: true,
+          cancelable: true,
+          clientX: htmlButton.getBoundingClientRect().left + 10,
+          clientY: htmlButton.getBoundingClientRect().top + 10
+        });
+        htmlButton.dispatchEvent(mouseDownEvent);
+        
+        const mouseUpEvent = new MouseEvent('mouseup', {
+          view: window,
+          bubbles: true,
+          cancelable: true,
+          clientX: htmlButton.getBoundingClientRect().left + 10,
+          clientY: htmlButton.getBoundingClientRect().top + 10
+        });
+        htmlButton.dispatchEvent(mouseUpEvent);
+        
+        const clickEvent = new MouseEvent('click', {
+          view: window,
+          bubbles: true,
+          cancelable: true,
+          clientX: htmlButton.getBoundingClientRect().left + 10,
+          clientY: htmlButton.getBoundingClientRect().top + 10
+        });
+        htmlButton.dispatchEvent(clickEvent);
+        
+        // Native click as backup
+        htmlButton.click();
         
         return buttonInfo;
       }
@@ -413,7 +435,34 @@ async function performLogin(
     }
   }
   
-  // Strategy 3: Press Enter on password field (common SPA pattern)
+  // Strategy 3: Try Puppeteer's click at element coordinates
+  if (!buttonClicked) {
+    logger.debug('Trying Puppeteer click at coordinates...');
+    try {
+      const buttonCoords = await page.evaluate(() => {
+        const btn = document.querySelector('.primary-btn[role="button"]') || document.querySelector('app-siq-button');
+        if (btn) {
+          const rect = btn.getBoundingClientRect();
+          return {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+            found: true as const
+          };
+        }
+        return { x: 0, y: 0, found: false as const };
+      });
+      
+      if (buttonCoords.found && buttonCoords.x && buttonCoords.y) {
+        await page.mouse.click(buttonCoords.x, buttonCoords.y);
+        logger.debug(`Clicked at coordinates (${buttonCoords.x}, ${buttonCoords.y})`);
+        buttonClicked = true;
+      }
+    } catch (error) {
+      logger.debug('Coordinate click failed:', error);
+    }
+  }
+  
+  // Strategy 4: Press Enter on password field (common SPA pattern)
   if (!buttonClicked) {
     logger.debug('Trying Enter key on password field...');
     await page.focus(passwordSelector);
@@ -511,9 +560,9 @@ async function performLogin(
   if (currentPath.includes('auth/login') && loginPageInfo.hasLoginForm) {
     logger.debug('Detected auth page, waiting for potential redirect...');
     
-    // Wait for up to 10 seconds for redirect, checking every 2 seconds
+    // Wait for up to 20 seconds for redirect, checking every 2 seconds (Lambda needs more time)
     let redirectWaitTime = 0;
-    const maxWaitTime = 10000;
+    const maxWaitTime = 20000;
     
     while (redirectWaitTime < maxWaitTime) {
       await new Promise(resolve => setTimeout(resolve, 2000));

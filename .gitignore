@@ -16,3 +16,19 @@ build/
 # Session data
 .sessions/
 ~/.config/sleepiq/
+
+# Terraform state
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+
+# Lambda build artifacts
+lambda-package/
+function.zip
+
+# Local env files
+.env
+.env.local
+.env.lambda

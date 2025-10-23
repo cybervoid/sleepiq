@@ -34,4 +34,6 @@ export interface ScraperOptions {
   headless?: boolean;
   timeout?: number;
   debug?: boolean;
+  puppeteerInstance?: any; // For Lambda: puppeteer-core instance
+  puppeteerLaunchOptions?: any; // For Lambda: custom launch options
 }

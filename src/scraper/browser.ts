@@ -62,6 +62,13 @@ export async function launchBrowser(options: ScraperOptions = {}, env?: Cloudfla
     return wrapper as unknown as Browser;
   }
 
+  // Check if custom puppeteer instance and launch options were provided (for Lambda)
+  if (options.puppeteerInstance && options.puppeteerLaunchOptions) {
+    logger.debug('Using provided Puppeteer instance with custom launch options');
+    const browser = await options.puppeteerInstance.launch(options.puppeteerLaunchOptions);
+    return browser;
+  }
+
   // For local development, use full puppeteer
   logger.debug('Using local Puppeteer');
   const browser = await puppeteer.launch({

@@ -13,7 +13,9 @@
     "test-api": "tsx scripts/test-api.ts",
     "clear-session": "tsx scripts/clear-session.ts",
     "test": "echo \"No tests specified\" && exit 0",
-    "test-cli": "node bin/sleepiq --help"
+    "test-cli": "node bin/sleepiq --help",
+    "build:lambda": "bash ./scripts/build-lambda.sh",
+    "deploy": "bash ./scripts/deploy.sh"
   },
   "repository": {
     "type": "git",
@@ -34,9 +36,12 @@
   "homepage": "https://github.com/cybervoid/sleepiq#readme",
   "dependencies": {
     "@types/node": "^24.8.1",
+    "@aws-sdk/client-s3": "^3.620.0",
+    "@sparticuz/chromium": "^123.0.1",
     "commander": "^12.1.0",
     "dotenv": "^17.2.3",
     "puppeteer": "^24.25.0",
+    "puppeteer-core": "^22.12.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
