@@ -15,7 +15,7 @@ import {
 import { SessionManager } from './session';
 import { 
   extractBiosignalsMessagesImproved, 
-  extractSleepSessionMessageImproved 
+  extractSleepSessionMessageImproved
 } from './improved-biosignals';
 
 export async function scrapeSleepMetrics(

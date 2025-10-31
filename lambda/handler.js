@@ -33,6 +33,36 @@ function response(statusCode, payload, extraHeaders = {}) {
   };
 }
 
+/**
+ * Clean sleep data to only include the expected fields
+ */
+function cleanSleepData(data) {
+  const allowedFields = [
+    '30-average',
+    'score',
+    'all-time-best',
+    'message',
+    'heartRateMsg',
+    'heartRateVariabilityMsg',
+    'breathRateMsg',
+    'date'
+  ];
+
+  const cleanedData = {};
+  
+  for (const sleeper in data) {
+    cleanedData[sleeper] = {};
+    
+    for (const field of allowedFields) {
+      if (field in data[sleeper]) {
+        cleanedData[sleeper][field] = data[sleeper][field];
+      }
+    }
+  }
+  
+  return cleanedData;
+}
+
 exports.handler = async (event) => {
   try {
     const envApiUser = process.env.API_USERNAME;
@@ -76,8 +106,11 @@ exports.handler = async (event) => {
     console.log("Launching browser with executable:", launchOptions.executablePath);
     const data = await scrapeSleepMetrics(credentials, scraperOptions);
 
+    // Clean the data to remove raw and legacy fields
+    const cleanedData = cleanSleepData(data);
+
     console.log("Sleep data extracted successfully");
-    return response(200, { success: true, data });
+    return response(200, { success: true, data: cleanedData });
 
   } catch (err) {
     console.error("Handler error:", err);

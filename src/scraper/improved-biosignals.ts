@@ -266,55 +266,53 @@ export async function extractSleepSessionMessageImproved(page: Page): Promise<st
 
     // Extract the main coaching message
     const message = await page.evaluate(() => {
-      // The message appears right after the metrics section and before the sleep timeline
-      // It's a short coaching message (1-2 sentences)
-      // It does NOT include "Did you know?" which is at the bottom
+      // The message appears right after the scores (30-day avg, SleepIQ score, All-time best)
+      // and BEFORE the sleep timeline/graph
+      // It's typically one standalone paragraph with 1-2 sentences
       
-      const allElements = Array.from(document.querySelectorAll('*'));
+      // Strategy: Look through body text line by line and find the coaching message
+      // that appears in the right position (after scores, before timeline)
+      const bodyText = document.body.innerText;
+      const lines = bodyText.split('\n').map(l => l.trim()).filter(l => l);
       
-      for (const element of allElements) {
-        const text = element.textContent?.trim() || '';
-        const elementRect = element.getBoundingClientRect();
+      // Look for the section that starts with "Sleep Session" and extract message from there
+      let foundScoresSection = false;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         
-        // Skip if not visible
-        if (elementRect.width === 0 || elementRect.height === 0) continue;
-        
-        // Look for the coaching message - it's between 20-200 characters typically
-        // and ends with . or !
-        if (text.length >= 20 && text.length <= 200 && 
-            (text.endsWith('.') || text.endsWith('!'))) {
-          
-          // Skip if it's a metric label
-          if (text.includes('30-day') || 
-              text.includes('All-time') ||
-              text.includes('Details') ||
-              text.includes('Time in bed') ||
-              text.includes('Sleep Number') ||
-              text.includes('Exit at') ||
-              /\d+h \d+m/.test(text) || // time format like "8h 54m"
-              /^\d/.test(text)) { // starts with number
-            continue;
+        // Find the scores section (contains "All-time best" followed by a number)
+        if (line.includes('All-time best')) {
+          // The next non-empty, non-numeric line that's long enough should be the message
+          for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+            const candidate = lines[j];
+            
+            // Skip numbers, short text, and metric labels
+            if (!candidate || 
+                /^\d+$/.test(candidate) || 
+                candidate.length < 30 || 
+                candidate.includes('PM') || 
+                candidate.includes('AM') ||
+                candidate.includes('Details') ||
+                candidate.includes('Restful') ||
+                candidate.includes('Restless') ||
+                candidate.includes('Time to fall') ||
+                candidate.includes('Bed exit') ||
+                /\d+h \d+m/.test(candidate)) {
+              continue;
+            }
+            
+            // Skip tips at the bottom
+            if (candidate.includes('Did you know?') ||
+                candidate.includes('Why your sleep matters')) {
+              break; // Stop searching once we hit the tips section
+            }
+            
+            // This should be the coaching message
+            console.log('Found sleep session message:', candidate);
+            return candidate;
           }
-          
-          // Skip "Did you know?" and similar tips
-          if (text.includes('Did you know?') || 
-              text.includes('Why your sleep matters')) {
-            continue;
-          }
-          
-          // Skip if it contains child text patterns that indicate it's a container
-          const childrenText = Array.from(element.children)
-            .map(child => child.textContent?.trim())
-            .join(' ');
-          if (childrenText.includes('Details') || 
-              childrenText.includes('Restful') ||
-              childrenText.includes('Restless')) {
-            continue;
-          }
-          
-          // This looks like the coaching message
-          console.log('Found sleep session message:', text);
-          return text;
+          break;
         }
       }
       
